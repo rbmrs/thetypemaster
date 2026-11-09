@@ -74,6 +74,20 @@ body {
   left: 2rem;
   padding: 0;
   text-align: left;
+  display: flex;
+  align-items: baseline;
+  gap: 1.5rem;
+}
+.site-nav a {
+  font-size: 1.07em;
+  color: #b0b0b0;
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+.site-nav a:hover,
+.site-nav a:focus-visible {
+  color: #fff;
+  text-decoration: underline;
 }
 .stats-bar {
   display: flex;

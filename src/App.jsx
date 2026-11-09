@@ -184,6 +184,9 @@ function App() {
     <>
       <div className="app">
         <h1>Type Master</h1>
+        <nav className="site-nav">
+          <a href="https://rbmrs.github.io/rbmrs/">Rafael Moraes</a>
+        </nav>
       </div>
 
       <div className="timer-container">
