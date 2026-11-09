@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Type Master</title>
+    <style>
+      /* Force perfect centering of words with moderate rightward adjustment */
+      .words-wrapper {
+        position: fixed !important;
+        top: 25% !important;
+        left: 50% !important;
+        transform: translateX(-50%) translateX(50px) !important; /* Reduced from 100px to 50px */
+        width: auto !important;
+        display: flex !important;
+        gap: 30px !important;
+        z-index: 5 !important;
+      }
+
+      /* Position history container relative to the centered words */
+      .word-history-container {
+        position: fixed !important;
+        top: 25% !important;
+        right: 50% !important;
+        margin-right: 55px !important;
+        display: flex !important;
+        flex-direction: row !important;
+        justify-content: flex-end !important;
+        gap: 30px !important;
+        z-index: 4 !important;
+        width: 400px !important;
+        opacity: 0.7 !important;
+      }
+
+      /* Ensure history items are visible */
+      .word.history-item {
+        color: #aaa !important;
+        opacity: 0.8 !important;
+      }
+    </style>
+    <script type="module" crossorigin src="/assets/index-Jne_AlOH.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-BHMJEB78.css">
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>
