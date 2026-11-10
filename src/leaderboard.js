@@ -42,18 +42,33 @@ export const fetchTop = async (duration, board, device) => {
   return (await res.json()).rows;
 };
 
-const ADJECTIVES = [
-  "Swift", "Calm", "Bold", "Quick", "Quiet", "Brave", "Clever", "Lucky", "Sly", "Keen",
-  "Witty", "Nimble", "Sunny", "Gentle", "Rapid", "Steady", "Bright", "Jolly", "Proud", "Zesty",
-];
-const ANIMALS = [
-  "Otter", "Heron", "Lynx", "Falcon", "Badger", "Fox", "Panda", "Gecko", "Raven", "Koala",
-  "Marten", "Puffin", "Ibex", "Tapir", "Walrus", "Wombat", "Bison", "Moose", "Lemur", "Owl",
-];
+// Random names per language. Portuguese puts the animal first and uses
+// adjectives that fit both genders. Every pair must pass NAME_RE (ASCII, at
+// most 16 characters), so no accents.
+const NAMES = {
+  en: {
+    first: [
+      "Swift", "Calm", "Bold", "Quick", "Quiet", "Brave", "Clever", "Lucky", "Sly", "Keen",
+      "Witty", "Nimble", "Sunny", "Gentle", "Rapid", "Steady", "Bright", "Jolly", "Proud", "Zesty",
+    ],
+    second: [
+      "Otter", "Heron", "Lynx", "Falcon", "Badger", "Fox", "Panda", "Gecko", "Raven", "Koala",
+      "Marten", "Puffin", "Ibex", "Tapir", "Walrus", "Wombat", "Bison", "Moose", "Lemur", "Owl",
+    ],
+  },
+  pt: {
+    first: [
+      "Lontra", "Lince", "Texugo", "Raposa", "Panda", "Corvo", "Coala", "Tucano", "Tatu", "Capivara",
+      "Morsa", "Alce", "Coruja", "Jaguar", "Golfinho", "Pinguim", "Esquilo", "Castor", "Arara", "Quati",
+    ],
+    second: [
+      "Veloz", "Feliz", "Audaz", "Leal", "Gentil", "Forte", "Valente", "Alegre", "Livre", "Firme",
+      "Nobre", "Tenaz", "Sagaz", "Sutil", "Jovial", "Genial", "Capaz", "Doce", "Rebelde", "Vivaz",
+    ],
+  },
+};
 const pick = (list) => list[Math.floor(Math.random() * list.length)];
-export const randomName = () => `${pick(ADJECTIVES)} ${pick(ANIMALS)}`;
-
-export const BOARDS = [
-  { id: "alltime", label: "All-time" },
-  { id: "weekly", label: "This week" },
-];
+export const randomName = (lang) => {
+  const { first, second } = NAMES[lang] || NAMES.en;
+  return `${pick(first)} ${pick(second)}`;
+};

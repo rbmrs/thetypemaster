@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { strings } from "../i18n.js";
 
 // Inline SVG flags: Windows shows flag emoji as two plain letters.
 const BrazilFlag = () => (
@@ -36,6 +37,7 @@ const LangMenu = ({ lang, onSelect, open, setOpen }) => {
   const rootRef = useRef(null);
   const buttonRef = useRef(null);
   const current = LANGS.find((l) => l.lang === lang) || LANGS[0];
+  const t = strings(lang);
 
   // Close on a click outside or on Escape (focus goes back to the flag).
   useEffect(() => {
@@ -84,8 +86,8 @@ const LangMenu = ({ lang, onSelect, open, setOpen }) => {
         className="lang-button"
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label={`Word language: ${current.name}`}
-        title={`Word language: ${current.name}`}
+        aria-label={`${t.language}: ${current.name}`}
+        title={`${t.language}: ${current.name}`}
         onClick={() => setOpen(!open)}
       >
         <current.Flag />
@@ -94,7 +96,7 @@ const LangMenu = ({ lang, onSelect, open, setOpen }) => {
         </svg>
       </button>
       {open && (
-        <div className="lang-list" role="menu" aria-label="Word language" onKeyDown={onMenuKey}>
+        <div className="lang-list" role="menu" aria-label={t.language} onKeyDown={onMenuKey}>
           {LANGS.map(({ lang: l, name, Flag }) => (
             <button
               key={l}

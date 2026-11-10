@@ -1,10 +1,8 @@
 import { useEffect, useState } from "react";
-import { BOARDS, DEVICE, fetchTop } from "../leaderboard.js";
+import { strings } from "../i18n.js";
+import { DEVICE, fetchTop } from "../leaderboard.js";
 
-const DEVICE_INFO =
-  DEVICE === "phone"
-    ? { label: "Phone leaderboard", tip: "Phone board: scores from touch screens. Desktop players have their own board." }
-    : { label: "Desktop leaderboard", tip: "Desktop board: scores from physical keyboards. Phone players have their own board." };
+const BOARDS = ["alltime", "weekly"];
 
 const DURATIONS = [
   { seconds: 30, label: "30s" },
@@ -12,13 +10,15 @@ const DURATIONS = [
   { seconds: 180, label: "3m" },
 ];
 
-const formatDate = (iso) =>
-  new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+const formatDate = (iso, locale) =>
+  new Date(iso).toLocaleDateString(locale, { day: "numeric", month: "short", year: "numeric" });
 
 // Top 10 for one round length on this device's board (desktop or phone).
 // `initial` ({alltime, weekly}) skips the first fetch when the rows came back
 // with a submit. `highlight` marks a name.
-const Leaderboard = ({ duration, initial, highlight, showDurations = false }) => {
+const Leaderboard = ({ duration, initial, highlight, showDurations = false, lang }) => {
+  const t = strings(lang);
+  const deviceTip = t.deviceTip[DEVICE];
   const [dur, setDur] = useState(duration);
   const [board, setBoard] = useState("alltime");
   const [rows, setRows] = useState(null);
@@ -48,7 +48,7 @@ const Leaderboard = ({ duration, initial, highlight, showDurations = false }) =>
     <div className="lb">
       <div className="lb-tabs">
         {showDurations && (
-          <div className="lb-tab-group" role="tablist" aria-label="Round length">
+          <div className="lb-tab-group" role="tablist" aria-label={t.roundLength}>
             {DURATIONS.map(({ seconds, label }) => (
               <button
                 key={seconds}
@@ -61,19 +61,19 @@ const Leaderboard = ({ duration, initial, highlight, showDurations = false }) =>
             ))}
           </div>
         )}
-        <div className="lb-tab-group" role="tablist" aria-label="Period">
-          {BOARDS.map(({ id, label }) => (
+        <div className="lb-tab-group" role="tablist" aria-label={t.period}>
+          {BOARDS.map((id) => (
             <button
               key={id}
               type="button"
               className={`timer-option ${board === id ? "active" : ""}`}
               onClick={() => setBoard(id)}
             >
-              {label}
+              {t.boards[id]}
             </button>
           ))}
         </div>
-        <span className="lb-device" tabIndex={0} aria-label={DEVICE_INFO.tip}>
+        <span className="lb-device" tabIndex={0} aria-label={deviceTip}>
           {DEVICE === "phone" ? (
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <rect x="7" y="2.5" width="10" height="19" rx="2" />
@@ -86,30 +86,30 @@ const Leaderboard = ({ duration, initial, highlight, showDurations = false }) =>
             </svg>
           )}
           <span className="lb-device-tip" aria-hidden="true">
-            {DEVICE_INFO.tip}
+            {deviceTip}
           </span>
         </span>
       </div>
       {error ? (
-        <p className="lb-note">Leaderboard unavailable.</p>
+        <p className="lb-note">{t.boardUnavailable}</p>
       ) : rows === null ? (
-        <p className="lb-note">Loading…</p>
+        <p className="lb-note">{t.loading}</p>
       ) : rows.length === 0 ? (
-        <p className="lb-note">No scores yet.</p>
+        <p className="lb-note">{t.noScores}</p>
       ) : (
         <table className="lb-table">
           <thead>
             <tr>
               <th>#</th>
-              <th className="lb-name">Name</th>
-              <th>Score</th>
-              <th>WPM</th>
-              <th>Acc.</th>
+              <th className="lb-name">{t.name}</th>
+              <th>{t.score}</th>
+              <th>{t.wpm}</th>
+              <th>{t.acc}</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((r, i) => (
-              <tr key={r.name} className={r.name.toLowerCase() === mine ? "lb-me" : ""} title={formatDate(r.date)}>
+              <tr key={r.name} className={r.name.toLowerCase() === mine ? "lb-me" : ""} title={formatDate(r.date, t.locale)}>
                 <td>{i + 1}</td>
                 <td className="lb-name" title={r.name}>
                   {r.name}

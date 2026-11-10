@@ -4,6 +4,7 @@ import LangMenu, { LANGS } from "./components/LangMenu.jsx";
 import Leaderboard from "./components/Leaderboard.jsx";
 import SaveScore from "./components/SaveScore.jsx";
 import WordDisplay from "./components/WordDisplay.jsx";
+import { strings } from "./i18n.js";
 import { startRound } from "./leaderboard.js";
 
 const STATS_KEY = "typeMasterStats";
@@ -66,12 +67,9 @@ const TROPHY_ICON =
 
 // The server ranks each player's best score. The rank belongs to this round
 // only when the round is that best; show it only when it makes the board.
-function boardPlaces(rank, score) {
-  return [
-    ["alltime", "all-time"],
-    ["weekly", "this week"],
-  ]
-    .map(([id, label]) => ({ id, label, r: rank?.[id] }))
+function boardPlaces(rank, score, labels) {
+  return ["alltime", "weekly"]
+    .map((id) => ({ id, label: labels[id], r: rank?.[id] }))
     .filter(({ r }) => r && score >= r.best && r.rank <= BOARD_SIZE)
     .map(({ id, label, r }) => ({ id, text: `#${r.rank} ${label}` }));
 }
@@ -95,6 +93,7 @@ function App() {
   const [selectedDuration, setSelectedDuration] = useState(30);
   const [lang, setLang] = useState(startLang);
   const [langMenuOpen, setLangMenuOpen] = useState(false);
+  const t = strings(lang);
   // Leaderboard: round token promise (from POST /start), the submit reply,
   // and the standalone board overlay.
   const [roundToken, setRoundToken] = useState(null);
@@ -106,6 +105,11 @@ function App() {
   const pageFocusRef = useRef(null);
   // Touch devices only: the real input that opens the phone's keyboard.
   const inputRef = useRef(null);
+
+  // Page language for screen readers, spell check and translation tools.
+  useEffect(() => {
+    document.documentElement.lang = t.locale;
+  }, [t]);
 
   // Clear the on-screen key highlight shortly after each press.
   useEffect(() => {
@@ -169,7 +173,7 @@ function App() {
   };
 
   // Same rule as the duration: no change mid-round. Saved, because the
-  // player picked it. WordDisplay remounts
+  // player picked it. The language sets all game text. WordDisplay remounts
   // on the new key, so the whole row is new words in the chosen language.
   const selectLang = (next) => {
     if (timerRunning || next === lang) return;
@@ -420,8 +424,8 @@ function App() {
   // "Saved as <name>" and this round's place badges.
   const savedRank = saved && (
     <p className="lb-rank">
-      Saved as <strong>{saved.name}</strong>
-      {boardPlaces(saved.rank, score).map(({ id, text }) => (
+      {t.savedAs} <strong>{saved.name}</strong>
+      {boardPlaces(saved.rank, score, t.places).map(({ id, text }) => (
         <span key={id} className="lb-place">
           <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14" aria-hidden="true">
             <path d={TROPHY_ICON} />
@@ -440,7 +444,7 @@ function App() {
           <a href="https://rbmrs.dev/">rbmrs.dev</a>
           {!timerRunning && !showResults && (
             <button type="button" className="nav-button" onClick={() => setShowBoard(true)}>
-              Leaderboard
+              {t.leaderboard}
             </button>
           )}
         </nav>
@@ -454,7 +458,7 @@ function App() {
         <div className="timer-display">
           {formatTime(timeLeft)}
           {timerRunning && (
-            <button className="reset-button" onClick={resetGame} aria-label="Reset timer">
+            <button className="reset-button" onClick={resetGame} aria-label={t.resetTimer}>
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
                 <path d={RESET_ICON} />
               </svg>
@@ -488,8 +492,8 @@ function App() {
             onChange={handlePhoneInput}
             onKeyDown={handlePhoneKeyDown}
             readOnly={gameOver}
-            placeholder={timerRunning ? "" : "Tap to type"}
-            aria-label="Type the highlighted word"
+            placeholder={timerRunning ? "" : t.tapToType}
+            aria-label={t.typeWord}
             autoCapitalize="off"
             autoCorrect="off"
             autoComplete="off"
@@ -505,15 +509,15 @@ function App() {
         )}
       </div>
 
-      {!IS_TOUCH && <Keyboard onKeyPress={handleVirtualKey} activeKey={activeKey} keyStatus={keyStatus} />}
+      {!IS_TOUCH && <Keyboard onKeyPress={handleVirtualKey} activeKey={activeKey} keyStatus={keyStatus} spaceLabel={t.space} />}
 
       {showBoard && (
         <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && closeBoard()}>
-          <div className="modal lb-modal" role="dialog" aria-label="Leaderboard">
-            <h2>Leaderboard</h2>
-            <Leaderboard duration={selectedDuration} showDurations />
+          <div className="modal lb-modal" role="dialog" aria-label={t.leaderboard}>
+            <h2>{t.leaderboard}</h2>
+            <Leaderboard duration={selectedDuration} showDurations lang={lang} />
             <button className="retry-button" onClick={closeBoard}>
-              Close
+              {t.close}
             </button>
           </div>
         </div>
@@ -528,23 +532,23 @@ function App() {
               <>
                 <div className="board-page-head">
                   <button type="button" className="board-page-button" ref={pageFocusRef} onClick={() => setBoardPage(false)}>
-                    <span aria-hidden="true">←</span> Results
+                    <span aria-hidden="true">←</span> {t.results}
                   </button>
                   <button type="button" className="board-page-button board-page-retry" onClick={resetGame}>
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="16" height="16" aria-hidden="true">
                       <path d={RESET_ICON} />
                     </svg>
-                    Try Again
+                    {t.tryAgain}
                   </button>
                 </div>
                 {savedRank}
-                <Leaderboard duration={selectedDuration} initial={saved.top} highlight={saved.name} />
+                <Leaderboard duration={selectedDuration} initial={saved.top} highlight={saved.name} lang={lang} />
               </>
             ) : (
               <div className="modal-main">
                 <div className="score-highlight">
                   <div className="score-label">
-                    Your Score
+                    {t.yourScore}
                     <span
                       className="info-icon"
                       onMouseEnter={() => setShowTooltip(true)}
@@ -559,33 +563,32 @@ function App() {
                   {showTooltip && (
                     <div className="tooltip-container">
                       <div className="tooltip">
-                        <p>Score System:</p>
+                        <p>{t.scoreSystem}</p>
                         <ul>
-                          <li>+1 point for each correct letter</li>
-                          <li>-1 point for each incorrect letter</li>
-                          <li>+5 points for each correct word</li>
-                          <li>-3 points for each incorrect word</li>
+                          {t.scoreRules.map((rule) => (
+                            <li key={rule}>{rule}</li>
+                          ))}
                         </ul>
                       </div>
                     </div>
                   )}
                 </div>
-                <h2>Time's Up!</h2>
+                <h2>{t.timesUp}</h2>
                 <div className="results">
                   <div className="result-item">
-                    <span className="result-label">Words Per Minute:</span>
+                    <span className="result-label">{t.wpmLong}</span>
                     <span className="result-value">{wpm}</span>
                   </div>
                   <div className="result-item">
-                    <span className="result-label">Accuracy:</span>
+                    <span className="result-label">{t.accuracy}</span>
                     <span className="result-value">{accuracy}%</span>
                   </div>
                   <div className="result-item">
-                    <span className="result-label">Words Typed:</span>
+                    <span className="result-label">{t.wordsTyped}</span>
                     <span className="result-value">{wordsAttempted}</span>
                   </div>
                   <div className="result-item">
-                    <span className="result-label">Correct Words:</span>
+                    <span className="result-label">{t.correctWords}</span>
                     <span className="result-value">{wordsCorrect}</span>
                   </div>
                 </div>
@@ -594,13 +597,14 @@ function App() {
                     <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16" aria-hidden="true">
                       <path d={TROPHY_ICON} />
                     </svg>
-                    Leaderboard
+                    {t.leaderboard}
                   </button>
                 ) : saved ? (
                   savedRank
                 ) : (
                   wordsCorrect > 0 && (
                     <SaveScore
+                      lang={lang}
                       token={roundToken}
                       result={{ score, wpm, accuracy, wordsTyped: wordsAttempted, wordsCorrect }}
                       onSaved={(data) => {
@@ -614,13 +618,13 @@ function App() {
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
                     <path d={RESET_ICON} />
                   </svg>
-                  Try Again
+                  {t.tryAgain}
                 </button>
               </div>
             )}
             {saved && !isPhone && (
               <div className="modal-board">
-                <Leaderboard duration={selectedDuration} initial={saved.top} highlight={saved.name} />
+                <Leaderboard duration={selectedDuration} initial={saved.top} highlight={saved.name} lang={lang} />
               </div>
             )}
           </div>

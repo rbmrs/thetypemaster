@@ -2,7 +2,7 @@ import { useEffect } from "react";
 
 const ROWS = ["qwertyuiop", "asdfghjkl", "zxcvbnm"];
 
-const Keyboard = ({ onKeyPress, activeKey, keyStatus = "" }) => {
+const Keyboard = ({ onKeyPress, activeKey, keyStatus = "", spaceLabel = "Space" }) => {
   useEffect(() => {
     const handleResize = () => {
       const container = document.querySelector(".keyboard-container");
@@ -45,7 +45,7 @@ const Keyboard = ({ onKeyPress, activeKey, keyStatus = "" }) => {
           className={`key-button key-space ${activeKey === " " ? "key-active" : ""}`}
           onClick={() => onKeyPress(" ")}
         >
-          Space
+          {spaceLabel}
         </button>
       </div>
     </div>
