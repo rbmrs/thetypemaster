@@ -695,3 +695,9 @@ html.embed .app {
 html.embed body {
   overflow: hidden;
 }
+/* Narrow screens: the header would sit under the centred timer, so move the timer below it. */
+@media (max-width: 700px) {
+  .timer-container {
+    top: 4.25rem;
+  }
+}
