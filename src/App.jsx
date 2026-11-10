@@ -28,6 +28,27 @@ const formatTime = (seconds) => {
   return `${m}:${s.toString().padStart(2, "0")}`;
 };
 
+// The server ranks each player's best score, not this round. When this
+// round is below that best, say so and name the best each rank belongs to.
+function rankMessage(rank, score) {
+  const all = rank?.alltime;
+  const week = rank?.weekly;
+  const notBest = all && score < all.best;
+  const parts = [];
+  if (all) parts.push(notBest ? `not a new best · your best ${all.best} is #${all.rank} all-time` : `#${all.rank} all-time`);
+  if (week) {
+    if (score >= week.best) {
+      // This round is the week's best, but the all-time rank is for an older score.
+      parts.push(notBest ? `this round is #${week.rank} this week` : `#${week.rank} this week`);
+    } else if (all && week.best === all.best) {
+      parts.push(`#${week.rank} this week`);
+    } else {
+      parts.push(`your week's best ${week.best} is #${week.rank} this week`);
+    }
+  }
+  return parts.map((p) => ` · ${p}`).join("");
+}
+
 function App() {
   const [typedText, setTypedText] = useState("");
   const [activeKey, setActiveKey] = useState("");
@@ -478,8 +499,7 @@ function App() {
               {saved ? (
                 <p className="lb-rank">
                   Saved as <strong>{saved.name}</strong>
-                  {saved.rank.alltime && <> · #{saved.rank.alltime.rank} all-time</>}
-                  {saved.rank.weekly && <> · #{saved.rank.weekly.rank} this week</>}
+                  {rankMessage(saved.rank, score)}
                 </p>
               ) : (
                 wordsCorrect > 0 && (
