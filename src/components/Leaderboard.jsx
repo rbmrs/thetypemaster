@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { BOARDS, fetchTop } from "../leaderboard.js";
+import { BOARDS, DEVICE, DEVICES, fetchTop } from "../leaderboard.js";
 
 const DURATIONS = [
   { seconds: 30, label: "30s" },
@@ -10,16 +10,18 @@ const DURATIONS = [
 const formatDate = (iso) =>
   new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
 
-// Top 10 for one round length. `initial` ({alltime, weekly}) skips the first
-// fetch when the rows came back with a submit. `highlight` marks a name.
+// Top 10 for one round length and device, starting on this device's board.
+// `initial` ({alltime, weekly}) skips the first fetch when the rows came back
+// with a submit. `highlight` marks a name.
 const Leaderboard = ({ duration, initial, highlight, showDurations = false }) => {
   const [dur, setDur] = useState(duration);
   const [board, setBoard] = useState("alltime");
+  const [device, setDevice] = useState(DEVICE);
   const [rows, setRows] = useState(null);
   const [error, setError] = useState(false);
 
   useEffect(() => {
-    const preset = dur === duration ? initial?.[board] : null;
+    const preset = dur === duration && device === DEVICE ? initial?.[board] : null;
     if (preset) {
       setRows(preset);
       setError(false);
@@ -28,13 +30,13 @@ const Leaderboard = ({ duration, initial, highlight, showDurations = false }) =>
     let live = true;
     setRows(null);
     setError(false);
-    fetchTop(dur, board)
+    fetchTop(dur, board, device)
       .then((r) => live && setRows(r))
       .catch(() => live && setError(true));
     return () => {
       live = false;
     };
-  }, [dur, board, duration, initial]);
+  }, [dur, board, device, duration, initial]);
 
   const mine = highlight?.toLowerCase();
 
@@ -62,6 +64,18 @@ const Leaderboard = ({ duration, initial, highlight, showDurations = false }) =>
               type="button"
               className={`timer-option ${board === id ? "active" : ""}`}
               onClick={() => setBoard(id)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="lb-tab-group" role="tablist" aria-label="Device">
+          {DEVICES.map(({ id, label }) => (
+            <button
+              key={id}
+              type="button"
+              className={`timer-option ${device === id ? "active" : ""}`}
+              onClick={() => setDevice(id)}
             >
               {label}
             </button>

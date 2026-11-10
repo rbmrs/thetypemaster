@@ -1,15 +1,20 @@
 // Type Master leaderboard: Cloudflare Worker + D1.
 //
-//   POST /start  {duration}                  -> {token}
+//   POST /start  {duration, device}          -> {token}
 //   POST /submit {token, name, score, wpm, accuracy, wordsTyped, wordsCorrect}
 //                                            -> {rank, top}
-//   GET  /top?duration=30&board=alltime|weekly&limit=10 -> {rows}
+//   GET  /top?duration=30&board=alltime|weekly&device=desktop|phone&limit=10 -> {rows}
+//
+// Desktop and phone rounds have separate boards. The device comes from the
+// browser at /start and is signed into the round token, so a player could
+// fake it; that is accepted.
 //
 // Anti-cheat is "good enough": a signed, single-use round token with a
 // minimum and maximum age, plausibility checks against the game's scoring,
 // and a per-IP rate limit (only a salted hash of the IP is stored).
 
 const DURATIONS = [30, 60, 180];
+const DEVICES = ["desktop", "phone"];
 const START_SLACK_MS = 2000; // a submit may come this much before `duration` elapses
 const TOKEN_MAX_AGE_MS = 10 * 60 * 1000;
 const RATE_LIMIT = 10; // submit attempts per hour per IP
@@ -93,6 +98,9 @@ const fail = (request, status, error) => json(request, status, { error });
 
 const isInt = (v) => Number.isInteger(v);
 
+// Missing or unknown device counts as desktop.
+const cleanDevice = (v) => (DEVICES.includes(v) ? v : "desktop");
+
 // Monday 00:00 UTC of the week that holds `now`.
 function weekStart(now) {
   const d = new Date(now);
@@ -142,23 +150,23 @@ export function checkResult({ duration, score, wpm, accuracy, wordsTyped, wordsC
   return null;
 }
 
-// Best row per name (ties: higher WPM, then earlier), for one duration since `since`.
+// Best row per name (ties: higher WPM, then earlier), for one duration and device since `since`.
 const BEST_CTE = `
   WITH best AS (
     SELECT * FROM (
       SELECT name, name_key, score, wpm, accuracy, created_at,
              ROW_NUMBER() OVER (PARTITION BY name_key ORDER BY score DESC, wpm DESC, created_at ASC, id ASC) AS rn
-      FROM scores WHERE duration = ?1 AND created_at >= ?2
+      FROM scores WHERE duration = ?1 AND device = ?2 AND created_at >= ?3
     ) WHERE rn = 1
   )`;
 
-async function topRows(env, duration, since, limit) {
+async function topRows(env, duration, device, since, limit) {
   const { results } = await env.DB.prepare(
     `${BEST_CTE}
      SELECT name, score, wpm, accuracy, created_at FROM best
-     ORDER BY score DESC, wpm DESC, created_at ASC LIMIT ?3`,
+     ORDER BY score DESC, wpm DESC, created_at ASC LIMIT ?4`,
   )
-    .bind(duration, since, limit)
+    .bind(duration, device, since, limit)
     .all();
   return results.map((r) => ({
     name: r.name,
@@ -169,7 +177,7 @@ async function topRows(env, duration, since, limit) {
   }));
 }
 
-async function rankOf(env, duration, since, nameKey) {
+async function rankOf(env, duration, device, since, nameKey) {
   const row = await env.DB.prepare(
     `${BEST_CTE}
      SELECT me.score AS best,
@@ -177,9 +185,9 @@ async function rankOf(env, duration, since, nameKey) {
          WHERE b.score > me.score
             OR (b.score = me.score AND (b.wpm > me.wpm OR (b.wpm = me.wpm AND b.created_at < me.created_at)))
        ) + 1 AS rank
-     FROM best me WHERE me.name_key = ?3`,
+     FROM best me WHERE me.name_key = ?4`,
   )
-    .bind(duration, since, nameKey)
+    .bind(duration, device, since, nameKey)
     .first();
   return row ? { rank: row.rank, best: row.best } : null;
 }
@@ -190,8 +198,9 @@ async function handleStart(request, env) {
   const body = await request.json().catch(() => null);
   const duration = Number(body?.duration);
   if (!DURATIONS.includes(duration)) return fail(request, 400, "bad duration");
+  const device = cleanDevice(body?.device);
   const nonce = b64url(crypto.getRandomValues(new Uint8Array(12)));
-  const payload = `${duration}.${Date.now()}.${nonce}`;
+  const payload = `${duration}.${device}.${Date.now()}.${nonce}`;
   const token = `${payload}.${await sign(env.TOKEN_SECRET, payload)}`;
   return json(request, 200, { token });
 }
@@ -212,11 +221,11 @@ async function handleSubmit(request, env) {
   const body = await request.json().catch(() => null);
   if (!body || typeof body.token !== "string") return fail(request, 400, "bad request");
 
-  // Token: "<duration>.<issuedAt>.<nonce>.<sig>"
+  // Token: "<duration>.<device>.<issuedAt>.<nonce>.<sig>"
   const parts = body.token.split(".");
-  if (parts.length !== 4) return fail(request, 400, "bad token");
-  const [dStr, tStr, nonce, sig] = parts;
-  if (!(await verify(env.TOKEN_SECRET, `${dStr}.${tStr}.${nonce}`, sig))) return fail(request, 400, "bad token");
+  if (parts.length !== 5) return fail(request, 400, "bad token");
+  const [dStr, device, tStr, nonce, sig] = parts;
+  if (!(await verify(env.TOKEN_SECRET, `${dStr}.${device}.${tStr}.${nonce}`, sig))) return fail(request, 400, "bad token");
   const duration = Number(dStr);
   const issuedAt = Number(tStr);
   const age = now - issuedAt;
@@ -247,18 +256,18 @@ async function handleSubmit(request, env) {
 
   const nameKey = name.toLowerCase();
   await env.DB.prepare(
-    `INSERT INTO scores (name, name_key, duration, score, wpm, accuracy, words_typed, words_correct, created_at, ip_hash)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO scores (name, name_key, duration, device, score, wpm, accuracy, words_typed, words_correct, created_at, ip_hash)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
-    .bind(name, nameKey, duration, result.score, result.wpm, result.accuracy, result.wordsTyped, result.wordsCorrect, now, hash)
+    .bind(name, nameKey, duration, device, result.score, result.wpm, result.accuracy, result.wordsTyped, result.wordsCorrect, now, hash)
     .run();
 
   const week = weekStart(now);
   const [allRank, weekRank, allTop, weekTop] = await Promise.all([
-    rankOf(env, duration, 0, nameKey),
-    rankOf(env, duration, week, nameKey),
-    topRows(env, duration, 0, 10),
-    topRows(env, duration, week, 10),
+    rankOf(env, duration, device, 0, nameKey),
+    rankOf(env, duration, device, week, nameKey),
+    topRows(env, duration, device, 0, 10),
+    topRows(env, duration, device, week, 10),
   ]);
 
   // Housekeeping: drop rows no longer needed for checks.
@@ -269,6 +278,7 @@ async function handleSubmit(request, env) {
 
   return json(request, 200, {
     name,
+    device,
     rank: { alltime: allRank, weekly: weekRank },
     top: { alltime: allTop, weekly: weekTop },
   });
@@ -277,19 +287,21 @@ async function handleSubmit(request, env) {
 async function handleTop(request, env, ctx, url) {
   const duration = Number(url.searchParams.get("duration") || 30);
   const board = url.searchParams.get("board") || "alltime";
+  const device = url.searchParams.get("device") || "desktop";
   const limit = Math.min(Math.max(Number(url.searchParams.get("limit")) || 10, 1), 10);
   if (!DURATIONS.includes(duration)) return fail(request, 400, "bad duration");
   if (board !== "alltime" && board !== "weekly") return fail(request, 400, "bad board");
+  if (!DEVICES.includes(device)) return fail(request, 400, "bad device");
 
   // Cache the body by normalised URL; CORS headers are added per request.
-  const cacheKey = new Request(`${url.origin}/top?duration=${duration}&board=${board}&limit=${limit}`);
+  const cacheKey = new Request(`${url.origin}/top?duration=${duration}&board=${board}&device=${device}&limit=${limit}`);
   const cache = caches.default;
   let body = null;
   const hit = await cache.match(cacheKey);
   if (hit) body = await hit.text();
   if (!body) {
     const since = board === "weekly" ? weekStart(Date.now()) : 0;
-    body = JSON.stringify({ duration, board, rows: await topRows(env, duration, since, limit) });
+    body = JSON.stringify({ duration, board, device, rows: await topRows(env, duration, device, since, limit) });
     ctx.waitUntil(
       cache.put(cacheKey, new Response(body, { headers: { "Cache-Control": `max-age=${TOP_CACHE_SECONDS}` } })),
     );

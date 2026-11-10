@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS scores (
   name          TEXT    NOT NULL,           -- as typed (trimmed)
   name_key      TEXT    NOT NULL,           -- lower-case, for one-entry-per-name
   duration      INTEGER NOT NULL,           -- 30, 60 or 180
+  device        TEXT    NOT NULL DEFAULT 'desktop', -- 'desktop' or 'phone', its own board
   score         INTEGER NOT NULL,
   wpm           INTEGER NOT NULL,
   accuracy      INTEGER NOT NULL,
@@ -15,8 +16,8 @@ CREATE TABLE IF NOT EXISTS scores (
   created_at    INTEGER NOT NULL,           -- ms since epoch
   ip_hash       TEXT    NOT NULL
 );
-CREATE INDEX IF NOT EXISTS scores_board ON scores (duration, created_at);
-CREATE INDEX IF NOT EXISTS scores_name ON scores (duration, name_key);
+CREATE INDEX IF NOT EXISTS scores_board ON scores (duration, device, created_at);
+CREATE INDEX IF NOT EXISTS scores_name ON scores (duration, device, name_key);
 
 -- Round tokens already used, so a token saves only once.
 CREATE TABLE IF NOT EXISTS used_tokens (

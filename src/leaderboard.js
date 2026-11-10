@@ -9,6 +9,14 @@ export const NAME_RE = /^[A-Za-z0-9 _-]{2,16}$/;
 
 export const cleanName = (raw) => raw.trim().replace(/\s+/g, " ");
 
+// Desktop and phone rounds have separate boards. Phones and tablets get the
+// html.touch class in index.html; they type on a screen keyboard.
+export const DEVICE = document.documentElement.classList.contains("touch") ? "phone" : "desktop";
+export const DEVICES = [
+  { id: "desktop", label: "Desktop" },
+  { id: "phone", label: "Phone" },
+];
+
 const post = async (path, body) => {
   const res = await fetch(`${LEADERBOARD_URL}${path}`, {
     method: "POST",
@@ -26,14 +34,14 @@ const post = async (path, body) => {
 
 // Resolves to a round token, or null when the leaderboard is unreachable.
 export const startRound = (duration) =>
-  post("/start", { duration })
+  post("/start", { duration, device: DEVICE })
     .then((d) => d.token || null)
     .catch(() => null);
 
 export const submitScore = (payload) => post("/submit", payload);
 
-export const fetchTop = async (duration, board) => {
-  const res = await fetch(`${LEADERBOARD_URL}/top?duration=${duration}&board=${board}&limit=10`);
+export const fetchTop = async (duration, board, device) => {
+  const res = await fetch(`${LEADERBOARD_URL}/top?duration=${duration}&board=${board}&device=${device}&limit=10`);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return (await res.json()).rows;
 };
