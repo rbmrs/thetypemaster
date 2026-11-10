@@ -2,7 +2,7 @@
 
 A timed typing game. Type the highlighted word, then press Space or Enter to move to the next one.
 
-Live: https://rbmrs.dev/type-master.html (standalone: https://rbmrs.dev/thetypemaster/)
+Live: https://rbmrs.dev/type-master (standalone: https://rbmrs.dev/thetypemaster/)
 
 ## Features
 
@@ -62,5 +62,5 @@ Known quirks kept from the original:
 
 Pushes to `main` build and deploy to GitHub Pages (`.github/workflows/deploy.yml`). The site is served at `rbmrs.dev/thetypemaster/` because the user site repo (`rbmrs/rbmrs.github.io`) owns the `rbmrs.dev` domain.
 
-- `?embed=1` hides the title and nav. `rbmrs.dev/type-master.html` uses it and forwards keys typed on the page into the game, so no click is needed.
+- `?embed=1` hides the title and nav. `rbmrs.dev/type-master` uses it and forwards keys typed on the page into the game, so no click is needed.
 - The theme reads the `theme` key in `localStorage`, the same key as rbmrs.dev. Same origin, so the site toggle updates the game live through the `storage` event.
