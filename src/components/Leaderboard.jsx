@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
 import { BOARDS, DEVICE, fetchTop } from "../leaderboard.js";
 
-const DEVICE_LABEL = DEVICE === "phone" ? "Phone leaderboard" : "Desktop leaderboard";
+const DEVICE_INFO =
+  DEVICE === "phone"
+    ? { label: "Phone leaderboard", tip: "Phone board: scores from touch screens. Desktop players have their own board." }
+    : { label: "Desktop leaderboard", tip: "Desktop board: scores from physical keyboards. Phone players have their own board." };
 
 const DURATIONS = [
   { seconds: 30, label: "30s" },
@@ -70,7 +73,7 @@ const Leaderboard = ({ duration, initial, highlight, showDurations = false }) =>
             </button>
           ))}
         </div>
-        <span className="lb-device" title={DEVICE_LABEL} aria-label={DEVICE_LABEL} role="img">
+        <span className="lb-device" tabIndex={0} aria-label={DEVICE_INFO.tip}>
           {DEVICE === "phone" ? (
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <rect x="7" y="2.5" width="10" height="19" rx="2" />
@@ -82,6 +85,9 @@ const Leaderboard = ({ duration, initial, highlight, showDurations = false }) =>
               <path d="M8 20h8M12 16v4" />
             </svg>
           )}
+          <span className="lb-device-tip" aria-hidden="true">
+            {DEVICE_INFO.tip}
+          </span>
         </span>
       </div>
       {error ? (

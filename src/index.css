@@ -1219,9 +1219,42 @@ html.touch .lang-menu {
   border-radius: 0 4px 4px 0;
 }
 .lb-device {
+  position: relative;
   display: inline-flex;
   align-items: center;
   color: var(--faint);
+  cursor: help;
+  outline: none;
+}
+.lb-device:hover,
+.lb-device:focus-visible {
+  color: var(--muted);
+}
+.lb-device-tip {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  right: -0.25rem;
+  z-index: 5;
+  width: max-content;
+  max-width: 14rem;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  box-shadow: 0 4px 12px var(--shadow);
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.35;
+  text-align: left;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.12s;
+}
+.lb-device:hover .lb-device-tip,
+.lb-device:focus .lb-device-tip {
+  opacity: 1;
+  visibility: visible;
 }
 .lb-device svg {
   width: 1rem;
