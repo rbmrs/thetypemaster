@@ -28,25 +28,21 @@ const formatTime = (seconds) => {
   return `${m}:${s.toString().padStart(2, "0")}`;
 };
 
-// The server ranks each player's best score, not this round. When this
-// round is below that best, say so and name the best each rank belongs to.
-function rankMessage(rank, score) {
-  const all = rank?.alltime;
-  const week = rank?.weekly;
-  const notBest = all && score < all.best;
-  const parts = [];
-  if (all) parts.push(notBest ? `not a new best · your best ${all.best} is #${all.rank} all-time` : `#${all.rank} all-time`);
-  if (week) {
-    if (score >= week.best) {
-      // This round is the week's best, but the all-time rank is for an older score.
-      parts.push(notBest ? `this round is #${week.rank} this week` : `#${week.rank} this week`);
-    } else if (all && week.best === all.best) {
-      parts.push(`#${week.rank} this week`);
-    } else {
-      parts.push(`your week's best ${week.best} is #${week.rank} this week`);
-    }
-  }
-  return parts.map((p) => ` · ${p}`).join("");
+// Top lists from the server hold 10 rows.
+const BOARD_SIZE = 10;
+const TROPHY_ICON =
+  "M7 4V2h10v2h4v3a4 4 0 0 1-4 4h-.35A5 5 0 0 1 13 13.9V17h3v2H8v-2h3v-3.1A5 5 0 0 1 7.35 11H7a4 4 0 0 1-4-4V4h4Zm0 2H5v1a2 2 0 0 0 2 2V6Zm10 0v3a2 2 0 0 0 2-2V6h-2Z";
+
+// The server ranks each player's best score. The rank belongs to this round
+// only when the round is that best; show it only when it makes the board.
+function boardPlaces(rank, score) {
+  return [
+    ["alltime", "all-time"],
+    ["weekly", "this week"],
+  ]
+    .map(([id, label]) => ({ id, label, r: rank?.[id] }))
+    .filter(({ r }) => r && score >= r.best && r.rank <= BOARD_SIZE)
+    .map(({ id, label, r }) => ({ id, text: `#${r.rank} ${label}` }));
 }
 
 function App() {
@@ -499,7 +495,14 @@ function App() {
               {saved ? (
                 <p className="lb-rank">
                   Saved as <strong>{saved.name}</strong>
-                  {rankMessage(saved.rank, score)}
+                  {boardPlaces(saved.rank, score).map(({ id, text }) => (
+                    <span key={id} className="lb-place">
+                      <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14" aria-hidden="true">
+                        <path d={TROPHY_ICON} />
+                      </svg>
+                      {text}
+                    </span>
+                  ))}
                 </p>
               ) : (
                 wordsCorrect > 0 && (

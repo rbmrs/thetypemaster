@@ -932,6 +932,24 @@ html.touch .center-area {
 .lb-rank strong {
   color: var(--text);
 }
+/* This round's place when it makes the board. */
+.lb-place {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-left: 0.4rem;
+  padding: 0.05rem 0.5rem;
+  border: 1px solid var(--warn);
+  border-radius: 999px;
+  background-color: var(--warn-glow);
+  color: var(--text);
+  font-size: 0.85em;
+  font-weight: 600;
+  vertical-align: middle;
+}
+.lb-place svg {
+  color: var(--warn);
+}
 .lb-tabs {
   display: flex;
   flex-wrap: wrap;
