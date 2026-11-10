@@ -685,15 +685,58 @@ h1 {
 }
 
 /* --- Embed mode (?embed=1, inside rbmrs.dev/type-master.html) ---
-   Same layout as the standalone page. The host renders the iframe at a
-   1440x900 design size and scales it down to fit. The header (title and
-   site link) is hidden: the host page already names the game, and the
-   link would navigate the frame. */
-html.embed .app {
-  display: none;
-}
+   The host sizes the iframe to the screen and the game renders at real size
+   inside it. Instead of pinning each part to a fixed spot, stack them in one
+   centred column so there are no big empty bands between them. The title and
+   site link are hidden (the host page names the game, and the link would
+   navigate the frame); the Leaderboard button stays. */
 html.embed body {
   overflow: hidden;
+  height: 100vh;
+  min-height: 0;
+  padding: 2.5rem 0 1rem;
+  box-sizing: border-box;
+}
+html.embed #root {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(0.75rem, 4vh, 2.5rem);
+}
+html.embed .app {
+  top: 1rem;
+  left: 1.25rem;
+}
+html.embed .app h1,
+html.embed .site-nav a {
+  display: none;
+}
+html.embed .timer-container,
+html.embed .center-area,
+html.embed .keyboard-container {
+  position: static;
+  transform: none;
+}
+/* Keep the timer's height when the round starts and the duration buttons go,
+   so the column below doesn't jump. */
+html.embed .timer-container {
+  min-height: 5rem;
+}
+html.embed .words-window {
+  position: static;
+  transform: none !important;
+}
+html.embed .center-area {
+  box-sizing: border-box;
+  max-width: min(340px, 100% - 2rem);
+}
+html.embed .keyboard-container {
+  width: 100%;
+  padding: 0;
+}
+html.embed .keyboard-row:last-child {
+  margin-bottom: 0;
 }
 /* Narrow screens: the header would sit under the centred timer, so move the timer below it. */
 @media (max-width: 700px) {
