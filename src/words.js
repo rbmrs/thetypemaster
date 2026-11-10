@@ -1,3 +1,5 @@
+import { PT_WORDS } from "./words-pt.js";
+
 export const WORDS = [
   "able",
   "about",
@@ -1171,4 +1173,10 @@ export const WORDS = [
   "strain",
 ];
 
-export const randomWord = () => WORDS[Math.floor(Math.random() * WORDS.length)];
+// Word lists by language. Both languages share one leaderboard.
+export const WORD_LISTS = { en: WORDS, pt: PT_WORDS };
+
+export const randomWord = (lang = "en") => {
+  const list = WORD_LISTS[lang] || WORDS;
+  return list[Math.floor(Math.random() * list.length)];
+};

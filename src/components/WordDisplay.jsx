@@ -5,15 +5,16 @@ import { randomWord } from "../words.js";
 // "debug1" placeholders are hidden by CSS until real words fill them.
 const CURRENT = 3;
 
-const WordDisplay = ({ onWordCompleted }) => {
+// App remounts this (key={lang}) to show a fresh row in a new language.
+const WordDisplay = ({ onWordCompleted, lang = "en" }) => {
   const [words, setWords] = useState([
     { text: "debug1" },
     { text: "debug1" },
     { text: "debug1" },
-    { text: randomWord() },
-    { text: randomWord() },
-    { text: randomWord() },
-    { text: randomWord() },
+    { text: randomWord(lang) },
+    { text: randomWord(lang) },
+    { text: randomWord(lang) },
+    { text: randomWord(lang) },
   ]);
 
   // Words after the last advance, until React renders them. Only `chain`
@@ -28,7 +29,7 @@ const WordDisplay = ({ onWordCompleted }) => {
   const advanceWords = (typed, isCorrect, chain = false) => {
     const updated = [...(chain && pending.current ? pending.current : words)];
     if (typed) updated[CURRENT] = { ...updated[CURRENT], typed, isCorrect };
-    const next = [...updated.slice(1), { text: randomWord() }];
+    const next = [...updated.slice(1), { text: randomWord(lang) }];
     pending.current = next;
     setWords(next);
     onWordCompleted?.(next[CURRENT].text);

@@ -7,6 +7,7 @@ import { startRound } from "./leaderboard.js";
 
 const STATS_KEY = "typeMasterStats";
 const THEME_KEY = "theme";
+const LANG_KEY = "typeMasterLang";
 
 const RESET_ICON =
   "M17.65,6.35C16.2,4.9 14.21,4 12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20C15.73,20 18.84,17.45 19.73,14H17.65C16.83,16.33 14.61,18 12,18A6,6 0 0,1 6,12A6,6 0 0,1 12,6C13.66,6 15.14,6.69 16.22,7.78L13,11H20V4L17.65,6.35Z";
@@ -18,6 +19,20 @@ const TIMER_OPTIONS = [
   { seconds: 60, label: "1m" },
   { seconds: 180, label: "3m" },
 ];
+
+// Word language. Both share one leaderboard, so saving works the same.
+const LANG_OPTIONS = [
+  { lang: "en", label: "EN", title: "English words" },
+  { lang: "pt", label: "PT", title: "Brazilian Portuguese words" },
+];
+const savedLang = () => {
+  try {
+    const v = localStorage.getItem(LANG_KEY);
+    return LANG_OPTIONS.some((o) => o.lang === v) ? v : "en";
+  } catch {
+    return "en";
+  }
+};
 
 // Set in index.html: phones and tablets type with their own keyboard app.
 const IS_TOUCH = document.documentElement.classList.contains("touch");
@@ -62,6 +77,7 @@ function App() {
   const [score, setScore] = useState(0);
   const [showTooltip, setShowTooltip] = useState(false);
   const [selectedDuration, setSelectedDuration] = useState(30);
+  const [lang, setLang] = useState(savedLang);
   // Leaderboard: round token promise (from POST /start), the submit reply,
   // and the standalone board overlay.
   const [roundToken, setRoundToken] = useState(null);
@@ -129,6 +145,19 @@ function App() {
     if (timerRunning) return;
     setSelectedDuration(seconds);
     setTimeLeft(seconds);
+  };
+
+  // Same rule as the duration: no change mid-round. WordDisplay remounts
+  // on the new key, so the whole row is new words in the chosen language.
+  const selectLang = (next) => {
+    if (timerRunning || next === lang) return;
+    setLang(next);
+    setTypedText("");
+    try {
+      localStorage.setItem(LANG_KEY, next);
+    } catch {
+      // Private mode: the choice lasts for this visit only.
+    }
   };
 
   const resetGame = () => {
@@ -394,11 +423,24 @@ function App() {
                 {label}
               </button>
             ))}
+            <span className="timer-options-divider" aria-hidden="true" />
+            {LANG_OPTIONS.map(({ lang: l, label, title }) => (
+              <button
+                key={l}
+                className={`timer-option ${lang === l ? "active" : ""}`}
+                onClick={() => selectLang(l)}
+                title={title}
+                aria-label={title}
+                aria-pressed={lang === l}
+              >
+                {label}
+              </button>
+            ))}
           </div>
         )}
       </div>
 
-      <WordDisplay onWordCompleted={(word) => setCurrentWord(word)} />
+      <WordDisplay key={lang} lang={lang} onWordCompleted={(word) => setCurrentWord(word)} />
 
       <div className="center-area">
         {IS_TOUCH ? (
