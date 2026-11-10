@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import Keyboard from "./components/Keyboard.jsx";
+import Leaderboard from "./components/Leaderboard.jsx";
+import SaveScore from "./components/SaveScore.jsx";
 import WordDisplay from "./components/WordDisplay.jsx";
+import { startRound } from "./leaderboard.js";
 
 const STATS_KEY = "typeMasterStats";
 const THEME_KEY = "theme";
@@ -39,6 +42,11 @@ function App() {
   const [score, setScore] = useState(0);
   const [showTooltip, setShowTooltip] = useState(false);
   const [selectedDuration, setSelectedDuration] = useState(30);
+  // Leaderboard: round token promise (from POST /start), the submit reply,
+  // and the standalone board overlay.
+  const [roundToken, setRoundToken] = useState(null);
+  const [saved, setSaved] = useState(null);
+  const [showBoard, setShowBoard] = useState(false);
 
   // Clear the on-screen key highlight shortly after each press.
   useEffect(() => {
@@ -110,6 +118,8 @@ function App() {
     setGameOver(false);
     setShowResults(false);
     setScore(0);
+    setRoundToken(null);
+    setSaved(null);
     if (typeof window.advanceWords === "function") {
       for (let i = 0; i < 7; i++) window.advanceWords();
     }
@@ -124,6 +134,11 @@ function App() {
     if (!startTime) {
       setStartTime(Date.now());
       setTimerRunning(true);
+      // Counts loaded from localStorage belong to an earlier round; start this one at zero.
+      setWordsAttempted(0);
+      setWordsCorrect(0);
+      // Ask for a round token; if this fails the game still works, only saving is off.
+      setRoundToken(startRound(selectedDuration));
     }
   };
 
@@ -150,7 +165,8 @@ function App() {
 
   const handleKeyDown = useCallback(
     (e) => {
-      if (gameOver) return;
+      if (gameOver || showBoard) return;
+      if (e.target instanceof HTMLInputElement) return;
       if (/^[a-z]$/i.test(e.key)) {
         typeLetter(e.key.toLowerCase());
       } else if (e.key === "Backspace") {
@@ -159,7 +175,7 @@ function App() {
         submitWord();
       }
     },
-    [typedText, startTime, currentWord, gameOver],
+    [typedText, startTime, currentWord, gameOver, showBoard],
   );
 
   // On-screen keyboard input.
@@ -190,6 +206,19 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (!showBoard) return;
+    const onKey = (e) => e.key === "Escape" && closeBoard();
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [showBoard]);
+
+  // Drop focus from the overlay buttons so Space doesn't press them again.
+  const closeBoard = () => {
+    setShowBoard(false);
+    document.activeElement?.blur?.();
+  };
+
+  useEffect(() => {
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [handleKeyDown]);
@@ -200,6 +229,11 @@ function App() {
         <h1>Type Master</h1>
         <nav className="site-nav">
           <a href="https://rbmrs.dev/">rbmrs.dev</a>
+          {!timerRunning && !showResults && (
+            <button type="button" className="nav-button" onClick={() => setShowBoard(true)}>
+              Leaderboard
+            </button>
+          )}
         </nav>
       </div>
 
@@ -240,62 +274,96 @@ function App() {
 
       <Keyboard onKeyPress={handleVirtualKey} activeKey={activeKey} keyStatus={keyStatus} />
 
+      {showBoard && (
+        <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && closeBoard()}>
+          <div className="modal lb-modal" role="dialog" aria-label="Leaderboard">
+            <h2>Leaderboard</h2>
+            <Leaderboard duration={selectedDuration} showDurations />
+            <button className="retry-button" onClick={closeBoard}>
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+
       {showResults && (
         <div className="modal-overlay">
-          <div className="modal">
-            <div className="score-highlight">
-              <div className="score-label">
-                Your Score
-                <span
-                  className="info-icon"
-                  onMouseEnter={() => setShowTooltip(true)}
-                  onMouseLeave={() => setShowTooltip(false)}
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-                    <path d={INFO_ICON} />
-                  </svg>
-                </span>
-              </div>
-              <div className="score-value">{score}</div>
-              {showTooltip && (
-                <div className="tooltip-container">
-                  <div className="tooltip">
-                    <p>Score System:</p>
-                    <ul>
-                      <li>+1 point for each correct letter</li>
-                      <li>-1 point for each incorrect letter</li>
-                      <li>+5 points for each correct word</li>
-                      <li>-3 points for each incorrect word</li>
-                    </ul>
-                  </div>
+          <div className={`modal ${saved ? "with-board" : ""}`}>
+            <div className="modal-main">
+              <div className="score-highlight">
+                <div className="score-label">
+                  Your Score
+                  <span
+                    className="info-icon"
+                    onMouseEnter={() => setShowTooltip(true)}
+                    onMouseLeave={() => setShowTooltip(false)}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                      <path d={INFO_ICON} />
+                    </svg>
+                  </span>
                 </div>
+                <div className="score-value">{score}</div>
+                {showTooltip && (
+                  <div className="tooltip-container">
+                    <div className="tooltip">
+                      <p>Score System:</p>
+                      <ul>
+                        <li>+1 point for each correct letter</li>
+                        <li>-1 point for each incorrect letter</li>
+                        <li>+5 points for each correct word</li>
+                        <li>-3 points for each incorrect word</li>
+                      </ul>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <h2>Time's Up!</h2>
+              <div className="results">
+                <div className="result-item">
+                  <span className="result-label">Words Per Minute:</span>
+                  <span className="result-value">{wpm}</span>
+                </div>
+                <div className="result-item">
+                  <span className="result-label">Accuracy:</span>
+                  <span className="result-value">{accuracy}%</span>
+                </div>
+                <div className="result-item">
+                  <span className="result-label">Words Typed:</span>
+                  <span className="result-value">{wordsAttempted}</span>
+                </div>
+                <div className="result-item">
+                  <span className="result-label">Correct Words:</span>
+                  <span className="result-value">{wordsCorrect}</span>
+                </div>
+              </div>
+              {saved ? (
+                <p className="lb-rank">
+                  Saved as <strong>{saved.name}</strong>
+                  {saved.rank.alltime && <> · #{saved.rank.alltime.rank} all-time</>}
+                  {saved.rank.weekly && <> · #{saved.rank.weekly.rank} this week</>}
+                </p>
+              ) : (
+                wordsCorrect > 0 && (
+                  <SaveScore
+                    token={roundToken}
+                    result={{ score, wpm, accuracy, wordsTyped: wordsAttempted, wordsCorrect }}
+                    onSaved={setSaved}
+                  />
+                )
               )}
+              <button className="retry-button" onClick={resetGame}>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
+                  <path d={RESET_ICON} />
+                </svg>
+                Try Again
+              </button>
             </div>
-            <h2>Time's Up!</h2>
-            <div className="results">
-              <div className="result-item">
-                <span className="result-label">Words Per Minute:</span>
-                <span className="result-value">{wpm}</span>
+            {saved && (
+              <div className="modal-board">
+                <Leaderboard duration={selectedDuration} initial={saved.top} highlight={saved.name} />
               </div>
-              <div className="result-item">
-                <span className="result-label">Accuracy:</span>
-                <span className="result-value">{accuracy}%</span>
-              </div>
-              <div className="result-item">
-                <span className="result-label">Words Typed:</span>
-                <span className="result-value">{wordsAttempted}</span>
-              </div>
-              <div className="result-item">
-                <span className="result-label">Correct Words:</span>
-                <span className="result-value">{wordsCorrect}</span>
-              </div>
-            </div>
-            <button className="retry-button" onClick={resetGame}>
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
-                <path d={RESET_ICON} />
-              </svg>
-              Try Again
-            </button>
+            )}
           </div>
         </div>
       )}

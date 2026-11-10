@@ -10,6 +10,7 @@ Live: https://rbmrs.dev/type-master.html (standalone: https://rbmrs.dev/thetypem
 - On-screen keyboard that flashes green or red for each key.
 - Results at the end: score, words per minute, accuracy, words typed, correct words.
 - Stats saved in `localStorage` under `typeMasterStats`.
+- Leaderboard per round length (all-time and this week). Save from the results card; the last name is kept under `typeMasterName`. The standalone page also has a Leaderboard link. Backend: `leaderboard/` (Cloudflare Worker + D1, see its README).
 
 ### Scoring
 
@@ -37,6 +38,10 @@ npm run preview  # serve the production build
 index.html                  entry HTML, includes word-layout CSS overrides
 src/main.jsx                React root
 src/App.jsx                 game state, timer, scoring, input, results modal
+src/leaderboard.js          leaderboard API client, Worker URL (VITE_LEADERBOARD_URL), random names
+src/components/Leaderboard.jsx  top 10 table with round length and period tabs
+src/components/SaveScore.jsx    save row on the results card
+leaderboard/                Cloudflare Worker + D1 backend (not part of the Pages build)
 src/components/WordDisplay.jsx  scrolling word row (3 history, 1 current, 3 upcoming)
 src/components/Keyboard.jsx     on-screen keyboard
 src/words.js                word list and random picker

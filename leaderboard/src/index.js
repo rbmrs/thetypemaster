@@ -1,0 +1,320 @@
+// Type Master leaderboard: Cloudflare Worker + D1.
+//
+//   POST /start  {duration}                  -> {token}
+//   POST /submit {token, name, score, wpm, accuracy, wordsTyped, wordsCorrect}
+//                                            -> {rank, top}
+//   GET  /top?duration=30&board=alltime|weekly&limit=10 -> {rows}
+//
+// Anti-cheat is "good enough": a signed, single-use round token with a
+// minimum and maximum age, plausibility checks against the game's scoring,
+// and a per-IP rate limit (only a salted hash of the IP is stored).
+
+const DURATIONS = [30, 60, 180];
+const START_SLACK_MS = 2000; // a submit may come this much before `duration` elapses
+const TOKEN_MAX_AGE_MS = 10 * 60 * 1000;
+const RATE_LIMIT = 10; // submit attempts per hour per IP
+const MAX_WPM = 250;
+const MAX_WORD_LEN = 8; // longest word in src/words.js
+const TOP_CACHE_SECONDS = 30;
+
+const ALLOWED_ORIGIN = "https://rbmrs.dev";
+const LOCALHOST_ORIGIN = /^http:\/\/localhost(:\d+)?$/;
+
+const NAME_RE = /^[A-Za-z0-9 _-]{2,16}$/;
+// Blocked anywhere in the name (spaces, "_" and "-" removed, lower-case).
+const BLOCK_ANYWHERE = ["fuck", "shit", "cunt", "nigg", "whore", "hitler", "kkk"];
+// Blocked as a whole word (or plural), or as the whole name joined up, so
+// "Peacock", "Dickens" and "Grapefruit" stay allowed.
+const BLOCK_WORDS = new Set([
+  "fag", "faggot", "bitch", "slut", "rape", "rapist", "nazi", "penis", "vagina", "pussy",
+  "porn", "cock", "dick", "dildo", "anal", "ass", "asshole", "retard", "admin", "moderator",
+]);
+
+// --- helpers ---------------------------------------------------------------
+
+const enc = new TextEncoder();
+
+function b64url(bytes) {
+  let s = "";
+  for (const b of bytes) s += String.fromCharCode(b);
+  return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function b64urlDecode(str) {
+  const s = atob(str.replace(/-/g, "+").replace(/_/g, "/"));
+  return Uint8Array.from(s, (c) => c.charCodeAt(0));
+}
+
+async function hmacKey(secret) {
+  return crypto.subtle.importKey("raw", enc.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, [
+    "sign",
+    "verify",
+  ]);
+}
+
+async function sign(secret, data) {
+  const sig = await crypto.subtle.sign("HMAC", await hmacKey(secret), enc.encode(data));
+  return b64url(new Uint8Array(sig));
+}
+
+async function verify(secret, data, sigB64) {
+  try {
+    return await crypto.subtle.verify("HMAC", await hmacKey(secret), b64urlDecode(sigB64), enc.encode(data));
+  } catch {
+    return false;
+  }
+}
+
+async function ipHash(secret, ip) {
+  const digest = await crypto.subtle.digest("SHA-256", enc.encode(`${secret}:ip:${ip}`));
+  return b64url(new Uint8Array(digest)).slice(0, 32);
+}
+
+function corsHeaders(request) {
+  const origin = request.headers.get("Origin") || "";
+  const h = { Vary: "Origin" };
+  if (origin === ALLOWED_ORIGIN || LOCALHOST_ORIGIN.test(origin)) {
+    h["Access-Control-Allow-Origin"] = origin;
+    h["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS";
+    h["Access-Control-Allow-Headers"] = "Content-Type";
+    h["Access-Control-Max-Age"] = "86400";
+  }
+  return h;
+}
+
+function json(request, status, body, extra = {}) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json", ...corsHeaders(request), ...extra },
+  });
+}
+
+const fail = (request, status, error) => json(request, status, { error });
+
+const isInt = (v) => Number.isInteger(v);
+
+// Monday 00:00 UTC of the week that holds `now`.
+function weekStart(now) {
+  const d = new Date(now);
+  const daysSinceMonday = (d.getUTCDay() + 6) % 7;
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - daysSinceMonday);
+}
+
+export function cleanName(raw) {
+  if (typeof raw !== "string") return null;
+  const name = raw.trim().replace(/\s+/g, " ");
+  if (!NAME_RE.test(name)) return null;
+  const flat = name.toLowerCase().replace(/[\s_-]/g, "");
+  if (flat.length < 2) return null;
+  if (BLOCK_ANYWHERE.some((w) => flat.includes(w))) return null;
+  const words = name.toLowerCase().split(/[\s_-]+/).filter(Boolean);
+  const blocked = (w) => BLOCK_WORDS.has(w) || (w.endsWith("s") && BLOCK_WORDS.has(w.slice(0, -1)));
+  if (blocked(flat) || words.some(blocked)) return null;
+  return name;
+}
+
+// Returns an error string, or null when the result is plausible.
+export function checkResult({ duration, score, wpm, accuracy, wordsTyped, wordsCorrect }) {
+  if (![score, wpm, accuracy, wordsTyped, wordsCorrect].every(isInt)) return "bad numbers";
+  if (score < 0 || wpm < 0 || wordsTyped < 1 || wordsCorrect < 0) return "bad numbers";
+  if (wordsCorrect > wordsTyped) return "wordsCorrect > wordsTyped";
+  if (accuracy < 0 || accuracy > 100) return "bad accuracy";
+  if (wpm > MAX_WPM) return "wpm too high";
+
+  const minutes = duration / 60;
+  // Words correct over the full round. The game measures WPM up to the last
+  // word typed, so its WPM can only be at or above this (minus timer drift).
+  const roundWpm = wordsCorrect / minutes;
+  if (roundWpm > MAX_WPM) return "too many words";
+  if (wpm < Math.floor(roundWpm * (duration / (duration + 3))) - 1) return "wpm does not match words";
+  if (wordsTyped > 8 * duration) return "too many words";
+
+  const expectedAccuracy = Math.round((wordsCorrect / wordsTyped) * 100);
+  if (Math.abs(accuracy - expectedAccuracy) > 1) return "accuracy does not match words";
+
+  // Game scoring: +1 correct letter, -1 wrong letter, +5 correct word,
+  // -3 wrong word, never below 0. A correct word gives at most len+5, a
+  // wrong word at most len correct letters. Slack covers retyping letters
+  // after a backspace and the floor at 0.
+  const wrong = wordsTyped - wordsCorrect;
+  const maxScore = Math.ceil(1.15 * (wordsCorrect * (MAX_WORD_LEN + 5) + wrong * MAX_WORD_LEN)) + 20;
+  if (score > maxScore) return "score too high";
+  return null;
+}
+
+// Best row per name (ties: higher WPM, then earlier), for one duration since `since`.
+const BEST_CTE = `
+  WITH best AS (
+    SELECT * FROM (
+      SELECT name, name_key, score, wpm, accuracy, created_at,
+             ROW_NUMBER() OVER (PARTITION BY name_key ORDER BY score DESC, wpm DESC, created_at ASC, id ASC) AS rn
+      FROM scores WHERE duration = ?1 AND created_at >= ?2
+    ) WHERE rn = 1
+  )`;
+
+async function topRows(env, duration, since, limit) {
+  const { results } = await env.DB.prepare(
+    `${BEST_CTE}
+     SELECT name, score, wpm, accuracy, created_at FROM best
+     ORDER BY score DESC, wpm DESC, created_at ASC LIMIT ?3`,
+  )
+    .bind(duration, since, limit)
+    .all();
+  return results.map((r) => ({
+    name: r.name,
+    score: r.score,
+    wpm: r.wpm,
+    accuracy: r.accuracy,
+    date: new Date(r.created_at).toISOString(),
+  }));
+}
+
+async function rankOf(env, duration, since, nameKey) {
+  const row = await env.DB.prepare(
+    `${BEST_CTE}
+     SELECT me.score AS best,
+       (SELECT COUNT(*) FROM best b
+         WHERE b.score > me.score
+            OR (b.score = me.score AND (b.wpm > me.wpm OR (b.wpm = me.wpm AND b.created_at < me.created_at)))
+       ) + 1 AS rank
+     FROM best me WHERE me.name_key = ?3`,
+  )
+    .bind(duration, since, nameKey)
+    .first();
+  return row ? { rank: row.rank, best: row.best } : null;
+}
+
+// --- routes ----------------------------------------------------------------
+
+async function handleStart(request, env) {
+  const body = await request.json().catch(() => null);
+  const duration = Number(body?.duration);
+  if (!DURATIONS.includes(duration)) return fail(request, 400, "bad duration");
+  const nonce = b64url(crypto.getRandomValues(new Uint8Array(12)));
+  const payload = `${duration}.${Date.now()}.${nonce}`;
+  const token = `${payload}.${await sign(env.TOKEN_SECRET, payload)}`;
+  return json(request, 200, { token });
+}
+
+async function handleSubmit(request, env) {
+  const now = Date.now();
+  const ip = request.headers.get("CF-Connecting-IP") || "unknown";
+  const hash = await ipHash(env.TOKEN_SECRET, ip);
+
+  // Rate limit counts every attempt, valid or not.
+  const hourAgo = now - 3600 * 1000;
+  const { n } = await env.DB.prepare("SELECT COUNT(*) AS n FROM submit_log WHERE ip_hash = ? AND at > ?")
+    .bind(hash, hourAgo)
+    .first();
+  if (n >= RATE_LIMIT) return fail(request, 429, "too many submits, try again later");
+  await env.DB.prepare("INSERT INTO submit_log (ip_hash, at) VALUES (?, ?)").bind(hash, now).run();
+
+  const body = await request.json().catch(() => null);
+  if (!body || typeof body.token !== "string") return fail(request, 400, "bad request");
+
+  // Token: "<duration>.<issuedAt>.<nonce>.<sig>"
+  const parts = body.token.split(".");
+  if (parts.length !== 4) return fail(request, 400, "bad token");
+  const [dStr, tStr, nonce, sig] = parts;
+  if (!(await verify(env.TOKEN_SECRET, `${dStr}.${tStr}.${nonce}`, sig))) return fail(request, 400, "bad token");
+  const duration = Number(dStr);
+  const issuedAt = Number(tStr);
+  const age = now - issuedAt;
+  if (age < duration * 1000 - START_SLACK_MS) return fail(request, 400, "round not finished");
+  if (age > TOKEN_MAX_AGE_MS) return fail(request, 400, "token expired");
+
+  const name = cleanName(body.name);
+  if (!name) return fail(request, 400, "bad name");
+
+  const result = {
+    duration,
+    score: body.score,
+    wpm: body.wpm,
+    accuracy: body.accuracy,
+    wordsTyped: body.wordsTyped,
+    wordsCorrect: body.wordsCorrect,
+  };
+  const problem = checkResult(result);
+  if (problem) return fail(request, 400, problem);
+
+  // Single use: the primary key rejects a second insert of the same nonce.
+  try {
+    await env.DB.prepare("INSERT INTO used_tokens (nonce, used_at) VALUES (?, ?)").bind(nonce, now).run();
+  } catch (err) {
+    if (String(err?.message).includes("UNIQUE constraint failed")) return fail(request, 400, "token already used");
+    throw err; // -> 500
+  }
+
+  const nameKey = name.toLowerCase();
+  await env.DB.prepare(
+    `INSERT INTO scores (name, name_key, duration, score, wpm, accuracy, words_typed, words_correct, created_at, ip_hash)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  )
+    .bind(name, nameKey, duration, result.score, result.wpm, result.accuracy, result.wordsTyped, result.wordsCorrect, now, hash)
+    .run();
+
+  const week = weekStart(now);
+  const [allRank, weekRank, allTop, weekTop] = await Promise.all([
+    rankOf(env, duration, 0, nameKey),
+    rankOf(env, duration, week, nameKey),
+    topRows(env, duration, 0, 10),
+    topRows(env, duration, week, 10),
+  ]);
+
+  // Housekeeping: drop rows no longer needed for checks.
+  await env.DB.batch([
+    env.DB.prepare("DELETE FROM used_tokens WHERE used_at < ?").bind(now - 2 * TOKEN_MAX_AGE_MS),
+    env.DB.prepare("DELETE FROM submit_log WHERE at < ?").bind(hourAgo),
+  ]);
+
+  return json(request, 200, {
+    name,
+    rank: { alltime: allRank, weekly: weekRank },
+    top: { alltime: allTop, weekly: weekTop },
+  });
+}
+
+async function handleTop(request, env, ctx, url) {
+  const duration = Number(url.searchParams.get("duration") || 30);
+  const board = url.searchParams.get("board") || "alltime";
+  const limit = Math.min(Math.max(Number(url.searchParams.get("limit")) || 10, 1), 10);
+  if (!DURATIONS.includes(duration)) return fail(request, 400, "bad duration");
+  if (board !== "alltime" && board !== "weekly") return fail(request, 400, "bad board");
+
+  // Cache the body by normalised URL; CORS headers are added per request.
+  const cacheKey = new Request(`${url.origin}/top?duration=${duration}&board=${board}&limit=${limit}`);
+  const cache = caches.default;
+  let body = null;
+  const hit = await cache.match(cacheKey);
+  if (hit) body = await hit.text();
+  if (!body) {
+    const since = board === "weekly" ? weekStart(Date.now()) : 0;
+    body = JSON.stringify({ duration, board, rows: await topRows(env, duration, since, limit) });
+    ctx.waitUntil(
+      cache.put(cacheKey, new Response(body, { headers: { "Cache-Control": `max-age=${TOP_CACHE_SECONDS}` } })),
+    );
+  }
+  return new Response(body, {
+    headers: {
+      "Content-Type": "application/json",
+      "Cache-Control": `public, max-age=${TOP_CACHE_SECONDS}`,
+      ...corsHeaders(request),
+    },
+  });
+}
+
+export default {
+  async fetch(request, env, ctx) {
+    const url = new URL(request.url);
+    if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders(request) });
+    try {
+      if (request.method === "POST" && url.pathname === "/start") return await handleStart(request, env);
+      if (request.method === "POST" && url.pathname === "/submit") return await handleSubmit(request, env);
+      if (request.method === "GET" && url.pathname === "/top") return await handleTop(request, env, ctx, url);
+      return fail(request, 404, "not found");
+    } catch (err) {
+      console.error(err);
+      return fail(request, 500, "server error");
+    }
+  },
+};

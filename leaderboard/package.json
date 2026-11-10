@@ -1,0 +1,14 @@
+{
+  "name": "typemaster-leaderboard",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "schema": "wrangler d1 execute typemaster-leaderboard --remote --file=schema.sql"
+  },
+  "devDependencies": {
+    "wrangler": "^4.160.0"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "typemaster-leaderboard",
+  "main": "src/index.js",
+  "compatibility_date": "2025-10-01",
+  "account_id": "496bc176ad4de98c1a43fcb68765804d",
+  "workers_dev": true,
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "typemaster-leaderboard",
+      "database_id": "9e9b8edc-d7c3-42b6-ac65-cebca4f2d0e2"
+    }
+  ]
+  // Secret (not in this file): TOKEN_SECRET, set with `npx wrangler secret put TOKEN_SECRET`.
+}
