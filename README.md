@@ -10,7 +10,7 @@ Live: https://rbmrs.dev/type-master (standalone: https://rbmrs.dev/thetypemaster
 - On-screen keyboard that flashes green or red for each key.
 - Results at the end: score, words per minute, accuracy, words typed, correct words.
 - Stats saved in `localStorage` under `typeMasterStats`.
-- Leaderboard per round length (all-time and this week), with separate desktop and phone boards. It opens on the board for the player's device. Save from the results card; the last name is kept under `typeMasterName`. The standalone page also has a Leaderboard link. Backend: `leaderboard/` (Cloudflare Worker + D1, see its README).
+- Leaderboard per round length (all-time and this week), with separate desktop and phone boards. The player sees the board for their device, marked by a small icon. Save from the results card; the last name is kept under `typeMasterName`. The standalone page also has a Leaderboard link. Backend: `leaderboard/` (Cloudflare Worker + D1, see its README).
 
 ### Scoring
 
@@ -39,7 +39,7 @@ index.html                  entry HTML, includes word-layout CSS overrides
 src/main.jsx                React root
 src/App.jsx                 game state, timer, scoring, input, results modal
 src/leaderboard.js          leaderboard API client, Worker URL (VITE_LEADERBOARD_URL), random names
-src/components/Leaderboard.jsx  top 10 table with round length, period and device tabs
+src/components/Leaderboard.jsx  top 10 table with round length and period tabs, and a device icon
 src/components/SaveScore.jsx    save row on the results card
 leaderboard/                Cloudflare Worker + D1 backend (not part of the Pages build)
 src/components/WordDisplay.jsx  scrolling word row (3 history, 1 current, 3 upcoming)

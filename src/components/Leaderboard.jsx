@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
-import { BOARDS, DEVICE, DEVICES, fetchTop } from "../leaderboard.js";
+import { BOARDS, DEVICE, fetchTop } from "../leaderboard.js";
+
+const DEVICE_LABEL = DEVICE === "phone" ? "Phone leaderboard" : "Desktop leaderboard";
 
 const DURATIONS = [
   { seconds: 30, label: "30s" },
@@ -10,18 +12,17 @@ const DURATIONS = [
 const formatDate = (iso) =>
   new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
 
-// Top 10 for one round length and device, starting on this device's board.
+// Top 10 for one round length on this device's board (desktop or phone).
 // `initial` ({alltime, weekly}) skips the first fetch when the rows came back
 // with a submit. `highlight` marks a name.
 const Leaderboard = ({ duration, initial, highlight, showDurations = false }) => {
   const [dur, setDur] = useState(duration);
   const [board, setBoard] = useState("alltime");
-  const [device, setDevice] = useState(DEVICE);
   const [rows, setRows] = useState(null);
   const [error, setError] = useState(false);
 
   useEffect(() => {
-    const preset = dur === duration && device === DEVICE ? initial?.[board] : null;
+    const preset = dur === duration ? initial?.[board] : null;
     if (preset) {
       setRows(preset);
       setError(false);
@@ -30,13 +31,13 @@ const Leaderboard = ({ duration, initial, highlight, showDurations = false }) =>
     let live = true;
     setRows(null);
     setError(false);
-    fetchTop(dur, board, device)
+    fetchTop(dur, board, DEVICE)
       .then((r) => live && setRows(r))
       .catch(() => live && setError(true));
     return () => {
       live = false;
     };
-  }, [dur, board, device, duration, initial]);
+  }, [dur, board, duration, initial]);
 
   const mine = highlight?.toLowerCase();
 
@@ -69,18 +70,19 @@ const Leaderboard = ({ duration, initial, highlight, showDurations = false }) =>
             </button>
           ))}
         </div>
-        <div className="lb-tab-group" role="tablist" aria-label="Device">
-          {DEVICES.map(({ id, label }) => (
-            <button
-              key={id}
-              type="button"
-              className={`timer-option ${device === id ? "active" : ""}`}
-              onClick={() => setDevice(id)}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        <span className="lb-device" title={DEVICE_LABEL} aria-label={DEVICE_LABEL} role="img">
+          {DEVICE === "phone" ? (
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="7" y="2.5" width="10" height="19" rx="2" />
+              <path d="M11 18.5h2" />
+            </svg>
+          ) : (
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="3" y="4" width="18" height="12" rx="1.5" />
+              <path d="M8 20h8M12 16v4" />
+            </svg>
+          )}
+        </span>
       </div>
       {error ? (
         <p className="lb-note">Leaderboard unavailable.</p>

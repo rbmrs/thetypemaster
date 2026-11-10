@@ -12,10 +12,6 @@ export const cleanName = (raw) => raw.trim().replace(/\s+/g, " ");
 // Desktop and phone rounds have separate boards. Phones and tablets get the
 // html.touch class in index.html; they type on a screen keyboard.
 export const DEVICE = document.documentElement.classList.contains("touch") ? "phone" : "desktop";
-export const DEVICES = [
-  { id: "desktop", label: "Desktop" },
-  { id: "phone", label: "Phone" },
-];
 
 const post = async (path, body) => {
   const res = await fetch(`${LEADERBOARD_URL}${path}`, {
