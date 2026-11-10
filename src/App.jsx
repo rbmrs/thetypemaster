@@ -78,11 +78,12 @@ function App() {
 
   useEffect(() => {
     if (startTime && wordsAttempted > 0) {
-      const minutes = (Date.now() - startTime) / 60000;
-      setWpm(Math.round(wordsCorrect / (minutes || 1 / 60)));
+      // Final WPM counts the full round. Live WPM uses at least 5 s so the first word doesn't spike.
+      const seconds = gameOver ? selectedDuration : Math.max((Date.now() - startTime) / 1000, 5);
+      setWpm(Math.round(wordsCorrect / (seconds / 60)));
       setAccuracy(Math.round((wordsCorrect / wordsAttempted) * 100));
     }
-  }, [wordsAttempted, wordsCorrect, startTime]);
+  }, [wordsAttempted, wordsCorrect, startTime, gameOver, selectedDuration]);
 
   useEffect(() => {
     let interval;

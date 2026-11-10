@@ -122,8 +122,8 @@ export function checkResult({ duration, score, wpm, accuracy, wordsTyped, wordsC
   if (wpm > MAX_WPM) return "wpm too high";
 
   const minutes = duration / 60;
-  // Words correct over the full round. The game measures WPM up to the last
-  // word typed, so its WPM can only be at or above this (minus timer drift).
+  // Words correct over the full round. The game's final WPM uses the same
+  // full-round time, so it should match this (minus timer drift).
   const roundWpm = wordsCorrect / minutes;
   if (roundWpm > MAX_WPM) return "too many words";
   if (wpm < Math.floor(roundWpm * (duration / (duration + 3))) - 1) return "wpm does not match words";
