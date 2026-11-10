@@ -199,7 +199,7 @@ function App() {
       <div className="app">
         <h1>Type Master</h1>
         <nav className="site-nav">
-          <a href="https://rbmrs.dev/">rbmrs</a>
+          <a href="https://rbmrs.dev/">rbmrs.dev</a>
         </nav>
       </div>
 
