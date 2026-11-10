@@ -134,8 +134,8 @@ function App() {
   };
 
   const submitWord = () => {
-    setWordsAttempted((n) => n + 1);
     if (typedText.trim() === "") return;
+    setWordsAttempted((n) => n + 1);
     const isCorrect = typedText.trim().toLowerCase() === currentWord.toLowerCase();
     if (isCorrect) {
       setWordsCorrect((n) => n + 1);
