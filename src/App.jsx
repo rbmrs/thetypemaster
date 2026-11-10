@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import Keyboard from "./components/Keyboard.jsx";
 import LangMenu, { LANGS } from "./components/LangMenu.jsx";
+import DeviceBadge from "./components/DeviceBadge.jsx";
 import Leaderboard from "./components/Leaderboard.jsx";
 import SaveScore from "./components/SaveScore.jsx";
 import WordDisplay from "./components/WordDisplay.jsx";
@@ -517,8 +518,13 @@ function App() {
       {showBoard && (
         <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && closeBoard()}>
           <div className="modal lb-modal" role="dialog" aria-label={t.leaderboard}>
-            <h2>{t.leaderboard}</h2>
-            <Leaderboard duration={selectedDuration} showDurations lang={lang} />
+            <h2>
+              <span className="lb-title">
+                {t.leaderboard}
+                <DeviceBadge lang={lang} className="lb-title-device" />
+              </span>
+            </h2>
+            <Leaderboard duration={selectedDuration} showDurations showDevice={false} lang={lang} />
             <button className="retry-button" onClick={closeBoard}>
               {t.close}
             </button>

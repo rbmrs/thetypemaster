@@ -1265,3 +1265,20 @@ html.touch .lang-menu {
   stroke-linecap: round;
   stroke-linejoin: round;
 }
+/* Leaderboard overlay: the device icon sits just right of the title.
+   It is out of flow, so the title text stays centred. */
+.lb-title {
+  position: relative;
+  display: inline-block;
+}
+.lb-title-device {
+  position: absolute;
+  left: calc(100% + 0.5rem);
+  top: 50%;
+  transform: translateY(-50%);
+}
+.lb-title-device .lb-device-tip {
+  font-family: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+  font-weight: 400;
+  max-width: min(14rem, 70vw);
+}

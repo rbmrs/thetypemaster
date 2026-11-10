@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { strings } from "../i18n.js";
 import { DEVICE, fetchTop } from "../leaderboard.js";
+import DeviceBadge from "./DeviceBadge.jsx";
 
 const BOARDS = ["alltime", "weekly"];
 
@@ -15,10 +16,10 @@ const formatDate = (iso, locale) =>
 
 // Top 10 for one round length on this device's board (desktop or phone).
 // `initial` ({alltime, weekly}) skips the first fetch when the rows came back
-// with a submit. `highlight` marks a name.
-const Leaderboard = ({ duration, initial, highlight, showDurations = false, lang }) => {
+// with a submit. `highlight` marks a name. `showDevice` puts the device icon
+// at the end of the tab row; turn it off when the title carries the icon.
+const Leaderboard = ({ duration, initial, highlight, showDurations = false, showDevice = true, lang }) => {
   const t = strings(lang);
-  const deviceTip = t.deviceTip[DEVICE];
   const [dur, setDur] = useState(duration);
   const [board, setBoard] = useState("alltime");
   const [rows, setRows] = useState(null);
@@ -73,22 +74,7 @@ const Leaderboard = ({ duration, initial, highlight, showDurations = false, lang
             </button>
           ))}
         </div>
-        <span className="lb-device" tabIndex={0} aria-label={deviceTip}>
-          {DEVICE === "phone" ? (
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <rect x="7" y="2.5" width="10" height="19" rx="2" />
-              <path d="M11 18.5h2" />
-            </svg>
-          ) : (
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <rect x="3" y="4" width="18" height="12" rx="1.5" />
-              <path d="M8 20h8M12 16v4" />
-            </svg>
-          )}
-          <span className="lb-device-tip" aria-hidden="true">
-            {deviceTip}
-          </span>
-        </span>
+        {showDevice && <DeviceBadge lang={lang} />}
       </div>
       {error ? (
         <p className="lb-note">{t.boardUnavailable}</p>
