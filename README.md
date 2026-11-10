@@ -43,10 +43,6 @@ src/words.js                word list and random picker
 src/index.css               styles
 ```
 
-## Deployment
-
-Netlify builds every push to `main` (`npm run build`, publish `dist/`). The settings live in `netlify.toml`.
-
 ## History
 
 The original source was lost. This code was rebuilt from the published Netlify bundle (deploy `682cb334`). A headless Chrome test confirmed the rebuild behaves the same as the original. The first commit holds the original built files.
