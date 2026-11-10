@@ -805,7 +805,7 @@ html.touch .words-window {
    Try Again fit on one screen, also inside the rbmrs.dev frame. */
 @media (max-width: 600px) {
   html.touch .modal {
-    width: calc(100% - 1.5rem);
+    width: calc(100% - 1rem);
     padding: 1.25rem;
   }
   html.touch .score-highlight {
