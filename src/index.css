@@ -941,10 +941,11 @@ html.touch .center-area {
 }
 /* This round's place when it makes the board. */
 .lb-place {
-  display: inline-flex;
+  display: flex;
+  width: fit-content;
   align-items: center;
   gap: 0.25rem;
-  margin-left: 0.4rem;
+  margin: 0.35rem auto 0;
   padding: 0.05rem 0.5rem;
   border: 1px solid var(--warn);
   border-radius: 999px;
@@ -952,7 +953,6 @@ html.touch .center-area {
   color: var(--text);
   font-size: 0.85em;
   font-weight: 600;
-  vertical-align: middle;
 }
 .lb-place svg {
   color: var(--warn);
