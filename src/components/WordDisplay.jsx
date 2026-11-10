@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { randomWord } from "../words.js";
 
 // Index of the word the user is typing. Earlier slots show history;
@@ -16,12 +16,23 @@ const WordDisplay = ({ onWordCompleted }) => {
     { text: randomWord() },
   ]);
 
-  const advanceWords = (typed, isCorrect) => {
-    const updated = [...words];
+  // Words after the last advance, until React renders them. Only `chain`
+  // calls (the phone input submitting two words in one event) build on it;
+  // other calls, like the 7 in a reset, keep their old behaviour.
+  const pending = useRef(null);
+  useEffect(() => {
+    pending.current = null;
+  }, [words]);
+
+  // Returns the new current word.
+  const advanceWords = (typed, isCorrect, chain = false) => {
+    const updated = [...(chain && pending.current ? pending.current : words)];
     if (typed) updated[CURRENT] = { ...updated[CURRENT], typed, isCorrect };
     const next = [...updated.slice(1), { text: randomWord() }];
+    pending.current = next;
     setWords(next);
     onWordCompleted?.(next[CURRENT].text);
+    return next[CURRENT].text;
   };
 
   // App drives word advancement through this global.

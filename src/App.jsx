@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Keyboard from "./components/Keyboard.jsx";
 import Leaderboard from "./components/Leaderboard.jsx";
 import SaveScore from "./components/SaveScore.jsx";
@@ -18,6 +18,9 @@ const TIMER_OPTIONS = [
   { seconds: 60, label: "1m" },
   { seconds: 180, label: "3m" },
 ];
+
+// Set in index.html: phones and tablets type with their own keyboard app.
+const IS_TOUCH = document.documentElement.classList.contains("touch");
 
 const formatTime = (seconds) => {
   const m = Math.floor(seconds / 60);
@@ -47,6 +50,8 @@ function App() {
   const [roundToken, setRoundToken] = useState(null);
   const [saved, setSaved] = useState(null);
   const [showBoard, setShowBoard] = useState(false);
+  // Touch devices only: the real input that opens the phone's keyboard.
+  const inputRef = useRef(null);
 
   // Clear the on-screen key highlight shortly after each press.
   useEffect(() => {
@@ -124,15 +129,17 @@ function App() {
     if (typeof window.advanceWords === "function") {
       for (let i = 0; i < 7; i++) window.advanceWords();
     }
+    focusPhoneInput();
   };
 
-  const typeLetter = (letter) => {
-    const isCorrect = currentWord[typedText.length]?.toLowerCase() === letter;
+  // `pos`, `started` and `word` let the phone input apply several keys from one event.
+  const typeLetter = (letter, pos = typedText.length, started = Boolean(startTime), word = currentWord) => {
+    const isCorrect = word[pos]?.toLowerCase() === letter;
     setScore(isCorrect ? (s) => s + 1 : (s) => Math.max(0, s - 1));
     setTypedText((t) => t + letter);
     setActiveKey(letter);
     setKeyStatus(isCorrect ? "correct" : "incorrect");
-    if (!startTime) {
+    if (!started) {
       setStartTime(Date.now());
       setTimerRunning(true);
       // Counts loaded from localStorage belong to an earlier round; start this one at zero.
@@ -149,19 +156,22 @@ function App() {
     setKeyStatus("");
   };
 
-  const submitWord = () => {
-    if (typedText.trim() === "") return;
+  // Returns the next word to type. `chain` lets the phone input submit more
+  // than one word in a single event (see WordDisplay).
+  const submitWord = (text = typedText, word = currentWord, chain = false) => {
+    if (text.trim() === "") return word;
     setWordsAttempted((n) => n + 1);
-    const isCorrect = typedText.trim().toLowerCase() === currentWord.toLowerCase();
+    const isCorrect = text.trim().toLowerCase() === word.toLowerCase();
     if (isCorrect) {
       setWordsCorrect((n) => n + 1);
       setScore((s) => s + 5);
     } else {
       setScore((s) => Math.max(0, s - 3));
     }
-    const typed = typedText.trim();
+    const typed = text.trim();
     setTypedText("");
-    if (typeof window.advanceWords === "function") window.advanceWords(typed, isCorrect);
+    if (typeof window.advanceWords === "function") return window.advanceWords(typed, isCorrect, chain);
+    return word;
   };
 
   const handleKeyDown = useCallback(
@@ -178,6 +188,49 @@ function App() {
     },
     [typedText, startTime, currentWord, gameOver, showBoard],
   );
+
+  // Phone keyboard: read the input's new value, not keydown (Android sends
+  // "Unidentified"). Replay the change as the same backspaces, letters and
+  // Space a desktop player would press, so the score is the same.
+  const handlePhoneInput = (e) => {
+    if (gameOver || showBoard) return;
+    const value = e.target.value.toLowerCase();
+    let keep = 0;
+    while (keep < typedText.length && value[keep] === typedText[keep]) keep++;
+    for (let i = typedText.length; i > keep; i--) backspace();
+    // Swipe typing and paste can bring a Space and the next word in one
+    // event, so track the word and typed text locally as a desktop player
+    // pressing the same keys would see them.
+    let text = typedText.slice(0, keep);
+    let word = currentWord;
+    let started = Boolean(startTime);
+    for (const ch of value.slice(keep)) {
+      if (/^[a-z]$/.test(ch)) {
+        typeLetter(ch, text.length, started, word);
+        text += ch;
+        started = true;
+      } else if (/\s/.test(ch) && text !== "") {
+        // A Space on an empty box does nothing, as on desktop.
+        word = submitWord(text, word, true);
+        text = "";
+      }
+    }
+  };
+
+  const handlePhoneKeyDown = (e) => {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    if (!gameOver && !showBoard) submitWord();
+  };
+
+  // Called inside the tap, so iOS opens the keyboard. Clear readOnly first:
+  // after a round it is still set, and iOS won't open the keyboard for it.
+  const focusPhoneInput = () => {
+    const input = IS_TOUCH && inputRef.current;
+    if (!input) return;
+    input.readOnly = false;
+    input.focus();
+  };
 
   // On-screen keyboard input.
   const handleVirtualKey = (key) => {
@@ -218,6 +271,70 @@ function App() {
     setShowBoard(false);
     document.activeElement?.blur?.();
   };
+
+  // Touch: a tap anywhere outside buttons, links and inputs opens the keyboard.
+  // It has to be focus() inside the tap, or iOS won't show the keyboard.
+  useEffect(() => {
+    if (!IS_TOUCH) return;
+    const onClick = (e) => {
+      if (e.target.closest("button, a, input, .modal-overlay")) return;
+      focusPhoneInput();
+    };
+    document.addEventListener("click", onClick);
+    return () => document.removeEventListener("click", onClick);
+  }, []);
+
+  // Close the keyboard when time is up, so the results card is in full view.
+  useEffect(() => {
+    if (IS_TOUCH && gameOver) inputRef.current?.blur();
+  }, [gameOver]);
+
+  // Touch: lay the game out in the part of the screen the keyboard doesn't
+  // cover (--vv-top / --vv-height, used in index.css). Inside the rbmrs.dev
+  // iframe the keyboard shrinks the parent page's visual viewport, not ours,
+  // so while typing, also fit to the part of the frame the parent shows.
+  useEffect(() => {
+    if (!IS_TOUCH) return;
+    const root = document.documentElement;
+    const own = window.visualViewport;
+    let frame = null;
+    let host = null;
+    try {
+      frame = window.frameElement;
+      host = frame ? window.parent.visualViewport : null;
+    } catch {
+      // Cross-origin parent: only our own viewport can be read.
+    }
+    const update = () => {
+      let top = own ? own.offsetTop : 0;
+      let height = own ? own.height : window.innerHeight;
+      if (frame && host && document.activeElement === inputRef.current) {
+        const rect = frame.getBoundingClientRect();
+        const shownTop = Math.max(0, host.offsetTop - rect.top);
+        const shownBottom = Math.min(rect.height, host.offsetTop + host.height - rect.top);
+        if (shownBottom - shownTop >= 200) {
+          top = shownTop;
+          height = shownBottom - shownTop;
+        }
+      }
+      root.style.setProperty("--vv-top", `${Math.round(top)}px`);
+      root.style.setProperty("--vv-height", `${Math.round(height)}px`);
+    };
+    const targets = [own, host, window].filter(Boolean);
+    update();
+    for (const t of targets) t.addEventListener("resize", update);
+    for (const t of [own, host].filter(Boolean)) t.addEventListener("scroll", update);
+    // activeElement settles after focusin/focusout, so read it a tick later.
+    const later = () => setTimeout(update, 0);
+    document.addEventListener("focusin", later);
+    document.addEventListener("focusout", later);
+    return () => {
+      for (const t of targets) t.removeEventListener("resize", update);
+      for (const t of [own, host].filter(Boolean)) t.removeEventListener("scroll", update);
+      document.removeEventListener("focusin", later);
+      document.removeEventListener("focusout", later);
+    };
+  }, []);
 
   useEffect(() => {
     document.addEventListener("keydown", handleKeyDown);
@@ -267,13 +384,33 @@ function App() {
       <WordDisplay onWordCompleted={(word) => setCurrentWord(word)} />
 
       <div className="center-area">
-        <div className={`typed-text ${gameOver ? "disabled" : ""}`}>
-          {typedText}
-          <span className={`cursor ${gameOver ? "hidden" : ""}`} />
-        </div>
+        {IS_TOUCH ? (
+          <input
+            ref={inputRef}
+            className={`typed-text typed-input ${gameOver ? "disabled" : ""}`}
+            type="text"
+            value={typedText}
+            onChange={handlePhoneInput}
+            onKeyDown={handlePhoneKeyDown}
+            readOnly={gameOver}
+            placeholder={timerRunning ? "" : "Tap to type"}
+            aria-label="Type the highlighted word"
+            autoCapitalize="off"
+            autoCorrect="off"
+            autoComplete="off"
+            spellCheck={false}
+            inputMode="text"
+            enterKeyHint="next"
+          />
+        ) : (
+          <div className={`typed-text ${gameOver ? "disabled" : ""}`}>
+            {typedText}
+            <span className={`cursor ${gameOver ? "hidden" : ""}`} />
+          </div>
+        )}
       </div>
 
-      <Keyboard onKeyPress={handleVirtualKey} activeKey={activeKey} keyStatus={keyStatus} />
+      {!IS_TOUCH && <Keyboard onKeyPress={handleVirtualKey} activeKey={activeKey} keyStatus={keyStatus} />}
 
       {showBoard && (
         <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && closeBoard()}>

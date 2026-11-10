@@ -16,6 +16,11 @@
         if (new URLSearchParams(location.search).has("embed")) {
           document.documentElement.classList.add("embed");
         }
+        // Phones and tablets: no hover and a coarse primary pointer. A narrow
+        // desktop window keeps the desktop layout. Read by App.jsx and index.css.
+        if (window.matchMedia && matchMedia("(hover: none) and (pointer: coarse)").matches) {
+          document.documentElement.classList.add("touch");
+        }
       })();
     </script>
     <link rel="icon" type="image/svg+xml" href="https://rbmrs.dev/assets/favicon.svg" />

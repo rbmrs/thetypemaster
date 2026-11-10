@@ -745,6 +745,80 @@ html.embed .keyboard-row:last-child {
   }
 }
 
+/* --- Phones and tablets (html.touch, set in index.html) ---
+   No on-screen keyboard picture: the player types with the phone's own
+   keyboard into a real input. The game is one column, like embed mode, laid
+   out in the part of the screen the keyboard leaves free (--vv-top and
+   --vv-height come from App.jsx). The column centres when it fits and keeps
+   its top in view when it doesn't. */
+html.touch {
+  touch-action: manipulation;
+}
+html.touch body {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: var(--vv-top, 0px);
+  height: var(--vv-height, 100dvh);
+  min-height: 0;
+  overflow: hidden;
+  justify-content: flex-start;
+  padding: 3.5rem 0 0.75rem;
+  box-sizing: border-box;
+}
+html.embed.touch body {
+  padding-top: 2.5rem;
+}
+html.touch #root {
+  width: 100%;
+  margin: auto 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(0.5rem, calc(var(--vv-height, 100dvh) * 0.035), 2rem);
+}
+html.touch .app {
+  top: 1rem;
+  left: 1.25rem;
+}
+html.touch .timer-container,
+html.touch .center-area {
+  position: static;
+  transform: none;
+}
+html.touch .timer-container {
+  min-height: 5rem;
+}
+html.touch .words-window {
+  position: static;
+  transform: none !important;
+}
+html.touch .center-area {
+  box-sizing: border-box;
+  max-width: min(340px, 100% - 2rem);
+}
+.typed-input {
+  font: inherit;
+  font-size: 2.2em;
+  height: auto;
+  color: var(--text);
+  caret-color: var(--text);
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--muted);
+  border-radius: 0;
+  outline: none;
+  padding: 0 0 0.3em;
+  box-sizing: border-box;
+  appearance: none;
+  -webkit-appearance: none;
+}
+.typed-input::placeholder {
+  color: var(--faint);
+  font-size: 0.6em;
+  opacity: 1;
+}
+
 /* --- Leaderboard --- */
 .site-nav {
   display: flex;
