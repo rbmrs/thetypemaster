@@ -1157,6 +1157,7 @@ html.touch .lang-menu {
 }
 .lb-table {
   width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
   font-size: 0.95rem;
   font-variant-numeric: tabular-nums;
@@ -1178,14 +1179,34 @@ html.touch .lang-menu {
 .lb-table th:first-child {
   text-align: left;
   color: var(--muted);
-  width: 1.5rem;
+}
+/* Fixed content widths (padding comes on top) fit the widest bold value:
+   rank 10, score 9999, wpm 999, accuracy 100%. The name column takes the
+   rest and is cut with "…". */
+.lb-table th:nth-child(1) {
+  width: 1.25rem;
+}
+.lb-table th:nth-child(3) {
+  width: 2.375rem;
+}
+.lb-table th:nth-child(4) {
+  width: 2rem;
+}
+.lb-table th:nth-child(5) {
+  width: 2.75rem;
+}
+@media (max-width: 600px) {
+  .lb-table th,
+  .lb-table td {
+    padding-left: 0.375rem;
+    padding-right: 0.375rem;
+  }
 }
 .lb-table .lb-name {
   text-align: left;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 10rem;
 }
 .lb-table tr.lb-me td {
   background-color: var(--word-bg-current);

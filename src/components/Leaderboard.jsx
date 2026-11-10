@@ -89,7 +89,9 @@ const Leaderboard = ({ duration, initial, highlight, showDurations = false }) =>
             {rows.map((r, i) => (
               <tr key={r.name} className={r.name.toLowerCase() === mine ? "lb-me" : ""} title={formatDate(r.date)}>
                 <td>{i + 1}</td>
-                <td className="lb-name">{r.name}</td>
+                <td className="lb-name" title={r.name}>
+                  {r.name}
+                </td>
                 <td>{r.score}</td>
                 <td>{r.wpm}</td>
                 <td>{r.accuracy}%</td>
