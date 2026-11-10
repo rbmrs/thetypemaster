@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Keyboard from "./components/Keyboard.jsx";
 import LangMenu, { LANGS } from "./components/LangMenu.jsx";
 import Leaderboard from "./components/Leaderboard.jsx";
@@ -247,22 +247,24 @@ function App() {
     return word;
   };
 
-  const handleKeyDown = useCallback(
-    (e) => {
-      if (gameOver || showBoard || langMenuOpen) return;
-      if (e.target instanceof HTMLInputElement) return;
-      // Space and Enter on the flag button press it; they are not typing.
-      if (e.target instanceof Element && e.target.closest(".lang-menu") && !/^[a-z]$/i.test(e.key)) return;
-      if (/^[a-z]$/i.test(e.key)) {
-        typeLetter(e.key.toLowerCase());
-      } else if (e.key === "Backspace") {
-        backspace();
-      } else if (e.key === " " || e.key === "Space" || e.key === "Enter") {
-        submitWord();
-      }
-    },
-    [typedText, startTime, currentWord, gameOver, showBoard, langMenuOpen],
-  );
+  // A plain function, so it sees this render's state (the picked duration,
+  // the language, the word). The document listener calls it through
+  // keyDownRef, which always holds the newest one.
+  const handleKeyDown = (e) => {
+    if (gameOver || showBoard || langMenuOpen) return;
+    if (e.target instanceof HTMLInputElement) return;
+    // Space and Enter on the flag button press it; they are not typing.
+    if (e.target instanceof Element && e.target.closest(".lang-menu") && !/^[a-z]$/i.test(e.key)) return;
+    if (/^[a-z]$/i.test(e.key)) {
+      typeLetter(e.key.toLowerCase());
+    } else if (e.key === "Backspace") {
+      backspace();
+    } else if (e.key === " " || e.key === "Space" || e.key === "Enter") {
+      submitWord();
+    }
+  };
+  const keyDownRef = useRef(handleKeyDown);
+  keyDownRef.current = handleKeyDown;
 
   // Phone keyboard: read the input's new value, not keydown (Android sends
   // "Unidentified"). Replay the change as the same backspaces, letters and
@@ -417,9 +419,10 @@ function App() {
   }, []);
 
   useEffect(() => {
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [handleKeyDown]);
+    const onKey = (e) => keyDownRef.current(e);
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
 
   // "Saved as <name>" and this round's place badges.
   const savedRank = saved && (
