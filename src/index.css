@@ -1094,6 +1094,49 @@ html.touch .lang-menu {
 .lb-place svg {
   color: var(--warn);
 }
+/* Phones: after Save the leaderboard is its own page (App.jsx, usePhone).
+   Its top row goes back to the results or starts a new round. */
+.board-page-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+.board-page-button {
+  font: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.85rem;
+  color: var(--text);
+  background-color: var(--key);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+.board-page-button:hover {
+  background-color: var(--border);
+}
+.board-page-retry {
+  color: var(--on-accent);
+  background-color: var(--link);
+  border-color: var(--link);
+}
+.board-page-retry:hover {
+  background-color: var(--link-hover);
+}
+.board-page-open {
+  width: 100%;
+}
+.board-page-open svg {
+  color: var(--warn);
+}
+.board-page .lb-rank {
+  margin: 0 0 0.75rem;
+}
 .lb-tabs {
   display: flex;
   flex-wrap: wrap;

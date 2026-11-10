@@ -38,6 +38,21 @@ const startLang = () => {
 // Set in index.html: phones and tablets type with their own keyboard app.
 const IS_TOUCH = document.documentElement.classList.contains("touch");
 
+// Phone width, the same breakpoint as the html.touch phone rules in index.css.
+// There the saved leaderboard gets its own page instead of sitting below the results.
+const PHONE_QUERY = "(max-width: 600px)";
+const usePhone = () => {
+  const [phone, setPhone] = useState(() => IS_TOUCH && window.matchMedia(PHONE_QUERY).matches);
+  useEffect(() => {
+    if (!IS_TOUCH) return;
+    const mq = window.matchMedia(PHONE_QUERY);
+    const onChange = () => setPhone(mq.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+  return phone;
+};
+
 const formatTime = (seconds) => {
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
@@ -85,6 +100,10 @@ function App() {
   const [roundToken, setRoundToken] = useState(null);
   const [saved, setSaved] = useState(null);
   const [showBoard, setShowBoard] = useState(false);
+  // Phones: the results card and the saved leaderboard are two pages.
+  const isPhone = usePhone();
+  const [boardPage, setBoardPage] = useState(false);
+  const pageFocusRef = useRef(null);
   // Touch devices only: the real input that opens the phone's keyboard.
   const inputRef = useRef(null);
 
@@ -175,6 +194,7 @@ function App() {
     setScore(0);
     setRoundToken(null);
     setSaved(null);
+    setBoardPage(false);
     if (typeof window.advanceWords === "function") {
       for (let i = 0; i < 7; i++) window.advanceWords();
     }
@@ -317,6 +337,11 @@ function App() {
     return () => document.removeEventListener("keydown", onKey);
   }, [showBoard]);
 
+  // Phones: move focus to the page that just opened (its first button).
+  useEffect(() => {
+    pageFocusRef.current?.focus();
+  }, [boardPage]);
+
   // Drop focus from the overlay buttons so Space doesn't press them again.
   const closeBoard = () => {
     setShowBoard(false);
@@ -391,6 +416,21 @@ function App() {
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [handleKeyDown]);
+
+  // "Saved as <name>" and this round's place badges.
+  const savedRank = saved && (
+    <p className="lb-rank">
+      Saved as <strong>{saved.name}</strong>
+      {boardPlaces(saved.rank, score).map(({ id, text }) => (
+        <span key={id} className="lb-place">
+          <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14" aria-hidden="true">
+            <path d={TROPHY_ICON} />
+          </svg>
+          {text}
+        </span>
+      ))}
+    </p>
+  );
 
   return (
     <>
@@ -481,84 +521,104 @@ function App() {
 
       {showResults && (
         <div className="modal-overlay">
-          <div className={`modal ${saved ? "with-board" : ""}`}>
-            <div className="modal-main">
-              <div className="score-highlight">
-                <div className="score-label">
-                  Your Score
-                  <span
-                    className="info-icon"
-                    onMouseEnter={() => setShowTooltip(true)}
-                    onMouseLeave={() => setShowTooltip(false)}
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-                      <path d={INFO_ICON} />
+          <div
+            className={`modal ${saved && !isPhone ? "with-board" : ""}${saved && isPhone && boardPage ? " board-page" : ""}`}
+          >
+            {saved && isPhone && boardPage ? (
+              <>
+                <div className="board-page-head">
+                  <button type="button" className="board-page-button" ref={pageFocusRef} onClick={() => setBoardPage(false)}>
+                    <span aria-hidden="true">←</span> Results
+                  </button>
+                  <button type="button" className="board-page-button board-page-retry" onClick={resetGame}>
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="16" height="16" aria-hidden="true">
+                      <path d={RESET_ICON} />
                     </svg>
-                  </span>
+                    Try Again
+                  </button>
                 </div>
-                <div className="score-value">{score}</div>
-                {showTooltip && (
-                  <div className="tooltip-container">
-                    <div className="tooltip">
-                      <p>Score System:</p>
-                      <ul>
-                        <li>+1 point for each correct letter</li>
-                        <li>-1 point for each incorrect letter</li>
-                        <li>+5 points for each correct word</li>
-                        <li>-3 points for each incorrect word</li>
-                      </ul>
-                    </div>
-                  </div>
-                )}
-              </div>
-              <h2>Time's Up!</h2>
-              <div className="results">
-                <div className="result-item">
-                  <span className="result-label">Words Per Minute:</span>
-                  <span className="result-value">{wpm}</span>
-                </div>
-                <div className="result-item">
-                  <span className="result-label">Accuracy:</span>
-                  <span className="result-value">{accuracy}%</span>
-                </div>
-                <div className="result-item">
-                  <span className="result-label">Words Typed:</span>
-                  <span className="result-value">{wordsAttempted}</span>
-                </div>
-                <div className="result-item">
-                  <span className="result-label">Correct Words:</span>
-                  <span className="result-value">{wordsCorrect}</span>
-                </div>
-              </div>
-              {saved ? (
-                <p className="lb-rank">
-                  Saved as <strong>{saved.name}</strong>
-                  {boardPlaces(saved.rank, score).map(({ id, text }) => (
-                    <span key={id} className="lb-place">
-                      <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14" aria-hidden="true">
-                        <path d={TROPHY_ICON} />
+                {savedRank}
+                <Leaderboard duration={selectedDuration} initial={saved.top} highlight={saved.name} />
+              </>
+            ) : (
+              <div className="modal-main">
+                <div className="score-highlight">
+                  <div className="score-label">
+                    Your Score
+                    <span
+                      className="info-icon"
+                      onMouseEnter={() => setShowTooltip(true)}
+                      onMouseLeave={() => setShowTooltip(false)}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                        <path d={INFO_ICON} />
                       </svg>
-                      {text}
                     </span>
-                  ))}
-                </p>
-              ) : (
-                wordsCorrect > 0 && (
-                  <SaveScore
-                    token={roundToken}
-                    result={{ score, wpm, accuracy, wordsTyped: wordsAttempted, wordsCorrect }}
-                    onSaved={setSaved}
-                  />
-                )
-              )}
-              <button className="retry-button" onClick={resetGame}>
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
-                  <path d={RESET_ICON} />
-                </svg>
-                Try Again
-              </button>
-            </div>
-            {saved && (
+                  </div>
+                  <div className="score-value">{score}</div>
+                  {showTooltip && (
+                    <div className="tooltip-container">
+                      <div className="tooltip">
+                        <p>Score System:</p>
+                        <ul>
+                          <li>+1 point for each correct letter</li>
+                          <li>-1 point for each incorrect letter</li>
+                          <li>+5 points for each correct word</li>
+                          <li>-3 points for each incorrect word</li>
+                        </ul>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <h2>Time's Up!</h2>
+                <div className="results">
+                  <div className="result-item">
+                    <span className="result-label">Words Per Minute:</span>
+                    <span className="result-value">{wpm}</span>
+                  </div>
+                  <div className="result-item">
+                    <span className="result-label">Accuracy:</span>
+                    <span className="result-value">{accuracy}%</span>
+                  </div>
+                  <div className="result-item">
+                    <span className="result-label">Words Typed:</span>
+                    <span className="result-value">{wordsAttempted}</span>
+                  </div>
+                  <div className="result-item">
+                    <span className="result-label">Correct Words:</span>
+                    <span className="result-value">{wordsCorrect}</span>
+                  </div>
+                </div>
+                {saved && isPhone ? (
+                  <button type="button" className="board-page-button board-page-open" ref={pageFocusRef} onClick={() => setBoardPage(true)}>
+                    <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16" aria-hidden="true">
+                      <path d={TROPHY_ICON} />
+                    </svg>
+                    Leaderboard
+                  </button>
+                ) : saved ? (
+                  savedRank
+                ) : (
+                  wordsCorrect > 0 && (
+                    <SaveScore
+                      token={roundToken}
+                      result={{ score, wpm, accuracy, wordsTyped: wordsAttempted, wordsCorrect }}
+                      onSaved={(data) => {
+                        setSaved(data);
+                        setBoardPage(true);
+                      }}
+                    />
+                  )
+                )}
+                <button className="retry-button" onClick={resetGame}>
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
+                    <path d={RESET_ICON} />
+                  </svg>
+                  Try Again
+                </button>
+              </div>
+            )}
+            {saved && !isPhone && (
               <div className="modal-board">
                 <Leaderboard duration={selectedDuration} initial={saved.top} highlight={saved.name} />
               </div>
