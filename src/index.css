@@ -375,13 +375,6 @@ h1 {
   gap: 0.5rem;
   margin-top: 0.5rem;
 }
-/* Thin line between the round-length and language buttons. */
-.timer-options-divider {
-  width: 1px;
-  align-self: stretch;
-  margin: 0.2rem 0.25rem;
-  background-color: var(--border);
-}
 .timer-option {
   font-family: inherit;
   background-color: transparent;
@@ -832,6 +825,84 @@ html.touch .center-area {
   color: var(--faint);
   font-size: 0.6em;
   opacity: 1;
+}
+
+/* --- Word language: flag button, top right (mirrors .app at top left) --- */
+.lang-menu {
+  position: absolute;
+  top: 2rem;
+  right: 2rem;
+  z-index: 20;
+  font-size: 0.875rem;
+}
+html.embed .lang-menu,
+html.touch .lang-menu {
+  top: 1rem;
+  right: 1.25rem;
+}
+.flag {
+  width: 1.25rem;
+  height: 0.875rem;
+  display: block;
+  flex: none;
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px var(--border);
+}
+.lang-button {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.15rem 0;
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+.lang-button:hover,
+.lang-button:focus-visible,
+.lang-button[aria-expanded="true"] {
+  color: var(--text);
+}
+.lang-caret {
+  width: 0.6rem;
+  height: 0.4rem;
+}
+.lang-list {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0.25rem;
+  background-color: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+.lang-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font: inherit;
+  white-space: nowrap;
+  text-align: left;
+  padding: 0.35rem 0.6rem;
+  background: none;
+  border: none;
+  border-radius: 3px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.lang-item:hover,
+.lang-item:focus-visible {
+  background-color: var(--border);
+  color: var(--text);
+  outline: none;
+}
+.lang-item.active {
+  color: var(--text);
+  font-weight: 600;
 }
 
 /* --- Leaderboard --- */

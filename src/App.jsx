@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Keyboard from "./components/Keyboard.jsx";
+import LangMenu, { LANGS } from "./components/LangMenu.jsx";
 import Leaderboard from "./components/Leaderboard.jsx";
 import SaveScore from "./components/SaveScore.jsx";
 import WordDisplay from "./components/WordDisplay.jsx";
@@ -21,17 +22,17 @@ const TIMER_OPTIONS = [
 ];
 
 // Word language. Both share one leaderboard, so saving works the same.
-const LANG_OPTIONS = [
-  { lang: "en", label: "EN", title: "English words" },
-  { lang: "pt", label: "PT", title: "Brazilian Portuguese words" },
-];
-const savedLang = () => {
+// A saved manual pick wins; otherwise the browser's top language decides.
+// The automatic choice is not saved.
+const startLang = () => {
   try {
     const v = localStorage.getItem(LANG_KEY);
-    return LANG_OPTIONS.some((o) => o.lang === v) ? v : "en";
+    if (LANGS.some((o) => o.lang === v)) return v;
   } catch {
-    return "en";
+    // No storage: fall through to the browser language.
   }
+  const top = (navigator.languages && navigator.languages[0]) || navigator.language || "";
+  return top.toLowerCase().startsWith("pt") ? "pt" : "en";
 };
 
 // Set in index.html: phones and tablets type with their own keyboard app.
@@ -77,7 +78,8 @@ function App() {
   const [score, setScore] = useState(0);
   const [showTooltip, setShowTooltip] = useState(false);
   const [selectedDuration, setSelectedDuration] = useState(30);
-  const [lang, setLang] = useState(savedLang);
+  const [lang, setLang] = useState(startLang);
+  const [langMenuOpen, setLangMenuOpen] = useState(false);
   // Leaderboard: round token promise (from POST /start), the submit reply,
   // and the standalone board overlay.
   const [roundToken, setRoundToken] = useState(null);
@@ -147,7 +149,8 @@ function App() {
     setTimeLeft(seconds);
   };
 
-  // Same rule as the duration: no change mid-round. WordDisplay remounts
+  // Same rule as the duration: no change mid-round. Saved, because the
+  // player picked it. WordDisplay remounts
   // on the new key, so the whole row is new words in the chosen language.
   const selectLang = (next) => {
     if (timerRunning || next === lang) return;
@@ -222,8 +225,10 @@ function App() {
 
   const handleKeyDown = useCallback(
     (e) => {
-      if (gameOver || showBoard) return;
+      if (gameOver || showBoard || langMenuOpen) return;
       if (e.target instanceof HTMLInputElement) return;
+      // Space and Enter on the flag button press it; they are not typing.
+      if (e.target instanceof Element && e.target.closest(".lang-menu") && !/^[a-z]$/i.test(e.key)) return;
       if (/^[a-z]$/i.test(e.key)) {
         typeLetter(e.key.toLowerCase());
       } else if (e.key === "Backspace") {
@@ -232,7 +237,7 @@ function App() {
         submitWord();
       }
     },
-    [typedText, startTime, currentWord, gameOver, showBoard],
+    [typedText, startTime, currentWord, gameOver, showBoard, langMenuOpen],
   );
 
   // Phone keyboard: read the input's new value, not keydown (Android sends
@@ -401,6 +406,10 @@ function App() {
         </nav>
       </div>
 
+      {!timerRunning && (
+        <LangMenu lang={lang} onSelect={selectLang} open={langMenuOpen} setOpen={setLangMenuOpen} />
+      )}
+
       <div className="timer-container">
         <div className="timer-display">
           {formatTime(timeLeft)}
@@ -419,19 +428,6 @@ function App() {
                 key={seconds}
                 className={`timer-option ${selectedDuration === seconds ? "active" : ""}`}
                 onClick={() => selectDuration(seconds)}
-              >
-                {label}
-              </button>
-            ))}
-            <span className="timer-options-divider" aria-hidden="true" />
-            {LANG_OPTIONS.map(({ lang: l, label, title }) => (
-              <button
-                key={l}
-                className={`timer-option ${lang === l ? "active" : ""}`}
-                onClick={() => selectLang(l)}
-                title={title}
-                aria-label={title}
-                aria-pressed={lang === l}
               >
                 {label}
               </button>
