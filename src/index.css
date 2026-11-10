@@ -686,9 +686,10 @@ h1 {
 
 /* --- Embed mode (?embed=1, inside rbmrs.dev/type-master.html) ---
    Same layout as the standalone page. The host renders the iframe at a
-   1440x900 design size and scales it down to fit. The site link is
-   hidden: inside the iframe it would navigate the frame. */
-html.embed .site-nav {
+   1440x900 design size and scales it down to fit. The header (title and
+   site link) is hidden: the host page already names the game, and the
+   link would navigate the frame. */
+html.embed .app {
   display: none;
 }
 html.embed body {
