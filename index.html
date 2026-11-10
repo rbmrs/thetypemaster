@@ -2,16 +2,37 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Type Master</title>
+    <meta name="color-scheme" content="light dark" />
+    <script>
+      // Same key and values as rbmrs.dev, so the site toggle drives the game too.
+      (function () {
+        try {
+          var stored = localStorage.getItem("theme");
+          if (stored === "light" || stored === "dark") {
+            document.documentElement.setAttribute("data-theme", stored);
+          }
+        } catch (e) {}
+        if (new URLSearchParams(location.search).has("embed")) {
+          document.documentElement.classList.add("embed");
+        }
+      })();
+    </script>
+    <link rel="icon" type="image/svg+xml" href="https://rbmrs.dev/assets/favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600&family=Newsreader:wght@600&display=swap"
+    />
+    <title>Type Master — Rafael Moraes</title>
     <style>
       /* Force perfect centering of words with moderate rightward adjustment */
       .words-wrapper {
         position: fixed !important;
         top: 25% !important;
         left: 50% !important;
-        transform: translateX(-50%) translateX(50px) !important; /* Reduced from 100px to 50px */
+        transform: translateX(-50%) translateX(50px) !important;
         width: auto !important;
         display: flex !important;
         gap: 30px !important;
@@ -35,7 +56,7 @@
 
       /* Ensure history items are visible */
       .word.history-item {
-        color: #aaa !important;
+        color: var(--muted) !important;
         opacity: 0.8 !important;
       }
     </style>

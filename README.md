@@ -2,7 +2,7 @@
 
 A timed typing game. Type the highlighted word, then press Space or Enter to move to the next one.
 
-Live: https://thetypemaster.netlify.app
+Live: https://rbmrs.dev/type-master.html (standalone: https://rbmrs.dev/thetypemaster/)
 
 ## Features
 
@@ -56,3 +56,10 @@ Known quirks kept from the original:
 - `WordDisplay` exposes `window.advanceWords`, and `App` calls it to move the word row.
 - Three hidden `debug1` words fill the history slots at start.
 - `index.html` points to a `/vite.svg` icon that does not exist.
+
+## Deployment
+
+Pushes to `main` build and deploy to GitHub Pages (`.github/workflows/deploy.yml`). The site is served at `rbmrs.dev/thetypemaster/` because the user site repo (`rbmrs/rbmrs.github.io`) owns the `rbmrs.dev` domain.
+
+- `?embed=1` hides the title and nav, and shows a "Click to start typing" overlay when the iframe has no focus. `rbmrs.dev/type-master.html` uses it.
+- The theme reads the `theme` key in `localStorage`, the same key as rbmrs.dev. Same origin, so the site toggle updates the game live through the `storage` event.
