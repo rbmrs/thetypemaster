@@ -194,11 +194,15 @@ h1 {
 .words-window {
   width: 100%;
   max-width: 800px;
-  padding: 2rem 1rem;
+  padding: 0 1rem;
+  box-sizing: border-box;
   margin: 0 auto;
   text-align: center;
   position: fixed;
-  top: 25%;
+  /* Sit just above .center-area (top: 45%, about 100px tall) so the
+     row never overlaps the input box, whatever the viewport height. */
+  top: auto;
+  bottom: calc(55% + 4.5rem);
   left: 50%;
   transform: translate(-50%);
   z-index: 2;
@@ -214,12 +218,19 @@ h1 {
   width: 100%;
   max-width: 900px;
   margin: 0 auto;
+  /* Fade the outer slots instead of cutting them off hard. */
+  mask-image: linear-gradient(to right, transparent, #000 15%, #000 85%, transparent);
 }
 .word {
   font-size: 1.8em;
   color: var(--faint);
   transition: transform 0.3s ease;
-  padding: 0 0.5rem;
+  /* Equal fixed slots keep the current (middle) word centered. */
+  flex: 0 0 136px;
+  width: 136px;
+  margin: 0 4px;
+  padding: 0;
+  box-sizing: border-box;
 }
 .current {
   color: var(--text);
@@ -636,7 +647,7 @@ h1 {
 }
 @media (max-height: 600px) {
   .center-area {
-    top: 40%;
+    top: 46%;
     padding: 15px;
   }
   .keyboard-container {
@@ -659,7 +670,7 @@ h1 {
     padding-bottom: 0.2em;
   }
   .words-window {
-    top: 20%;
+    bottom: calc(54% + 4rem);
   }
 }
 @keyframes blink {
@@ -672,7 +683,87 @@ h1 {
   }
 }
 
-/* --- Embed mode (?embed=1, inside rbmrs.dev/type-master.html) --- */
-html.embed .app {
+/* --- Embed mode (?embed=1, inside rbmrs.dev/type-master.html) ---
+   The host page says a physical keyboard is needed, so the on-screen
+   keyboard is hidden. Timer, words and input stack in normal flow,
+   centered in the frame. Keep the frame height on rbmrs.dev
+   (.player--type-master --player-h) in sync with this layout. */
+html.embed .app,
+html.embed .keyboard-container {
   display: none;
+}
+html.embed body {
+  min-height: 100vh;
+  overflow: hidden;
+}
+html.embed #root {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+html.embed .timer-container,
+html.embed .words-window,
+html.embed .center-area {
+  position: static !important;
+  transform: none !important;
+  top: auto;
+  bottom: auto;
+  left: auto;
+}
+/* Reserve room for the duration buttons, so the layout does not jump
+   up when they hide while the timer runs. */
+html.embed .timer-container {
+  justify-content: flex-start;
+  height: 5.25rem;
+}
+html.embed .words-window {
+  margin-top: 2.75rem;
+}
+html.embed .center-area {
+  margin-top: 1.75rem;
+  padding: 18px 20px;
+}
+html.embed .typed-text {
+  font-size: 2em;
+}
+/* Compact results card so it fits the shorter frame. */
+html.embed .modal {
+  padding: 1.25rem 1.75rem;
+}
+html.embed .score-highlight {
+  margin: -1.25rem -1.75rem 1rem;
+  padding: 0.9rem;
+}
+html.embed .score-value {
+  font-size: 2.6rem;
+  margin-top: 0.15rem;
+}
+html.embed .modal h2 {
+  font-size: 1.5rem;
+  margin-bottom: 0;
+}
+html.embed .results {
+  margin: 0.75rem 0;
+}
+html.embed .result-item {
+  font-size: 1.05rem;
+  margin-bottom: 0.4rem;
+}
+html.embed .result-item:last-child {
+  margin-top: 0.6rem;
+  padding-top: 0.6rem;
+}
+html.embed .result-item:last-child .result-label {
+  font-size: 1.1rem;
+}
+html.embed .result-item:last-child .result-value {
+  font-size: 1.25rem;
+}
+html.embed .retry-button {
+  margin-top: 0.75rem;
+  padding: 0.65rem;
+}
+html.embed .tooltip {
+  margin-bottom: 0;
 }
