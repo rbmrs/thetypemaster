@@ -790,6 +790,24 @@ html.touch .words-window {
   position: static;
   transform: none !important;
 }
+/* Phone width: smaller word slots so the next word fits beside the current
+   one. The longest word (8 letters) still fits in a slot. */
+@media (max-width: 600px) {
+  html.touch .words-window {
+    padding: 0 0.5rem;
+  }
+  html.touch .words-container {
+    height: 48px;
+    mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent);
+  }
+  html.touch .word {
+    font-size: 1.3em;
+    flex: 0 0 104px;
+    width: 104px;
+    height: 42px;
+    margin: 0 3px;
+  }
+}
 html.touch .center-area {
   box-sizing: border-box;
   max-width: min(340px, 100% - 2rem);
