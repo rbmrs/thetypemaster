@@ -640,10 +640,6 @@ function App() {
                 <h2>{t.timesUp}</h2>
                 <div className="results">
                   <div className="result-item">
-                    <span className="result-label">{t.rawWpm}</span>
-                    <span className="result-value">{formatWpm(final.rawWpm10)}</span>
-                  </div>
-                  <div className="result-item">
                     <span className="result-label">{t.precision}</span>
                     <span className="result-value">{final.precision}%</span>
                   </div>

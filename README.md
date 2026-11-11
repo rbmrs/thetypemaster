@@ -8,7 +8,7 @@ Live: https://rbmrs.dev/type-master (standalone: https://rbmrs.dev/thetypemaster
 
 - 30s, 1m or 3m rounds. The timer starts on your first keystroke.
 - On-screen keyboard that flashes green or red for each key.
-- Results at the end: net WPM (big), raw WPM, precision, words typed, correct words.
+- Results at the end: net WPM (big), precision, words typed, correct words.
 - The last round's result is saved in `localStorage` under `typeMasterStats` (`version: 2`; nothing reads it back).
 - Language menu (flag, top right): English or Brazilian Portuguese. It sets the words and all game text. The choice is saved under `typeMasterLang`; without one, the browser language decides.
 - Quiet sound cues, made with Web Audio: a light tick for a correct word, a low tone for a wrong word, a chime when time is up. No sound per letter. The speaker button (top right) turns them on or off; the choice is saved under `typeMasterSound`. On by default.
