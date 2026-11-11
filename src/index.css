@@ -572,7 +572,9 @@ button.info-icon {
   text-transform: none;
   letter-spacing: normal;
   text-align: left;
-  pointer-events: auto;
+  /* Let the pointer pass through: if the popup covers the (i) icon, it must
+     not steal the hover, or the popup closes and reopens in a loop. */
+  pointer-events: none;
   margin-bottom: 100px;
 }
 .tooltip p {
