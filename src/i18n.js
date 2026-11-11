@@ -52,6 +52,13 @@ const STRINGS = {
     loading: "Loading…",
     noScores: "No scores yet.",
     boardUnavailable: "Leaderboard unavailable.",
+    // Why a row ranks above the next one with the same score.
+    tieBreak: {
+      chars: "more net characters",
+      wrongWords: "fewer wrong words",
+      lead: "ahead for longer",
+      time: "saved first",
+    },
     deviceTip: {
       desktop: "Desktop board: scores from physical keyboards. Phone players have their own board.",
       phone: "Phone board: scores from touch screens. Desktop players have their own board.",
@@ -108,6 +115,12 @@ const STRINGS = {
     loading: "Carregando…",
     noScores: "Nenhuma pontuação ainda.",
     boardUnavailable: "Ranking indisponível.",
+    tieBreak: {
+      chars: "mais caracteres líquidos",
+      wrongWords: "menos palavras erradas",
+      lead: "na frente por mais tempo",
+      time: "salvo antes",
+    },
     deviceTip: {
       desktop: "Ranking do computador: pontuações de teclados físicos. Quem joga no celular tem um ranking próprio.",
       phone: "Ranking do celular: pontuações de telas de toque. Quem joga no computador tem um ranking próprio.",

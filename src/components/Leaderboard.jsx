@@ -99,6 +99,8 @@ const Leaderboard = ({ duration, initial, highlight, showDurations = false, show
                 <td>{i + 1}</td>
                 <td className="lb-name" title={r.name}>
                   {r.name}
+                  {/* Same net WPM as the row below: say why this one ranks higher. */}
+                  {r.tieBreak && <span className="lb-tie">{t.tieBreak[r.tieBreak]}</span>}
                 </td>
                 <td>{formatWpm(r.netWpm10)}</td>
                 <td>{r.precision}%</td>

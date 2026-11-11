@@ -6,7 +6,7 @@ Live: https://rbmrs.dev/type-master (standalone: https://rbmrs.dev/thetypemaster
 
 ## Features
 
-- 30s, 1m or 3m rounds. The timer starts on your first keystroke.
+- 30s, 1m or 3m rounds. The timer starts on your first letter key and the round ends exactly 30 s, 1 min or 3 min later. A key at or after that moment does not count.
 - On-screen keyboard that flashes green or red for each key.
 - Results at the end: net WPM (big), precision, words typed, correct words.
 - The last round's result is saved in `localStorage` under `typeMasterStats` (`version: 2`; nothing reads it back).
@@ -22,9 +22,11 @@ The score is **net WPM** = (correct characters ÷ 5 − wrong words) ÷ minutes,
 - Each wrong word costs 5 characters, so a skipped word always loses. A fixed typo costs only time.
 - Raw WPM = correct characters ÷ 5 ÷ minutes (before the wrong-word cost).
 - Precision = correct letter keys ÷ all letter keys, deleted ones included. A key is correct when it matches the word's letter at that position. Example: type "cst", delete "st", type "at" = 5 letter keys, 4 correct = 80%.
-- Leaderboard ties: fewer wrong words, then the earlier score.
+- Leaderboard order: net characters (correct characters − 5 per wrong word), then fewer wrong words, then lead, then the earlier score. Net characters, not the rounded WPM, so at 3m one more character always ranks higher.
+- Lead: how long you were ahead. Picture your net characters over the round: each correct word adds its letters + 1 when you send it, each wrong word takes 5 away, and the unfinished word adds its correct start at its last correct letter. Lead is the area under that line. Two players with the same score: the one who got there sooner was ahead for longer. The board shows no number for it; when two rows show the same score, the upper one gets a short note on why ("ahead for longer", "fewer wrong words", "more net characters" or "saved first").
+- The clock uses `performance.now()` (key event times), not `Date.now()`. The countdown reads the real time left, so it does not drift.
 
-The code is `src/scoring.js`; the leaderboard Worker uses the same file.
+The code is `src/scoring.js` (the leaderboard Worker uses the same file) and `src/round.js` (the round clock and the word times for the lead).
 
 ## Development
 
@@ -60,7 +62,8 @@ Without `live` both use the local board.
 index.html                  entry HTML, includes word-layout CSS overrides
 src/main.jsx                React root
 src/App.jsx                 game state, timer, key counts, input, results modal
-src/scoring.js              net WPM, raw WPM and precision (shared with the Worker)
+src/scoring.js              net WPM, raw WPM, precision and lead (shared with the Worker)
+src/round.js                round clock: time limit cut-off and word times for the lead
 src/sound.js                sound cues (Web Audio) and the saved on/off choice
 src/leaderboard.js          leaderboard API client, Worker URL (VITE_LEADERBOARD_URL), random names
 src/i18n.js                 game text in English and Portuguese
@@ -71,7 +74,7 @@ src/components/WordDisplay.jsx  scrolling word row (3 history, 1 current, 3 upco
 src/components/Keyboard.jsx     on-screen keyboard
 src/words.js                word list and random picker
 src/index.css               styles
-test/                       node --test tests: word lengths, scoring and the Worker's checks
+test/                       node --test tests: word lengths, scoring, lead, the Worker's checks and board SQL (node:sqlite)
 scripts/bot.mjs             test bot (npm run bot): plays full rounds in Chrome like a fast human
 ```
 

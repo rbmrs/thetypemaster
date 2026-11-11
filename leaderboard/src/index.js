@@ -1,7 +1,7 @@
 // Type Master leaderboard: Cloudflare Worker + D1.
 //
 //   POST /start  {duration, device}          -> {token}
-//   POST /submit {token, name, correctChars, letterKeys, correctLetterKeys, wordsTyped, wordsCorrect}
+//   POST /submit {token, name, correctChars, letterKeys, correctLetterKeys, wordsTyped, wordsCorrect, lead}
 //                                            -> {name, device, result, rank, top}
 //   GET  /top?duration=30&board=alltime|weekly&device=desktop|phone&limit=10 -> {rows}
 //
@@ -15,8 +15,11 @@
 //
 // The game sends raw counts; the Worker computes net WPM and precision
 // itself with the game's own scoring code (src/scoring.js).
+//
+// Ranking: net characters (correct characters - 5 per wrong word), then
+// fewer wrong words, then lead (ahead for longer), then the earlier entry.
 
-import { scoreRound } from "../../src/scoring.js";
+import { WRONG_WORD_CHARS, scoreRound } from "../../src/scoring.js";
 
 const DURATIONS = [30, 60, 180];
 const DEVICES = ["desktop", "phone"];
@@ -129,7 +132,8 @@ export function cleanName(raw) {
 }
 
 // Returns an error string, or null when the counts are plausible.
-export function checkResult({ duration, correctChars, letterKeys, correctLetterKeys, wordsTyped, wordsCorrect }) {
+// A missing lead (an older game) counts as 0.
+export function checkResult({ duration, correctChars, letterKeys, correctLetterKeys, wordsTyped, wordsCorrect, lead = 0 }) {
   const nums = [correctChars, letterKeys, correctLetterKeys, wordsTyped, wordsCorrect];
   if (!nums.every(isInt) || nums.some((n) => n < 0) || wordsTyped < 1) return "bad numbers";
   if (wordsCorrect > wordsTyped) return "wordsCorrect > wordsTyped";
@@ -147,47 +151,69 @@ export function checkResult({ duration, correctChars, letterKeys, correctLetterK
   // Every counted letter was a letter key, a correct one at that position.
   if (correctChars > letterKeys + wc) return "characters do not match keys";
   if (correctChars - wc > correctLetterKeys) return "characters do not match keys";
+  // Lead: each step counts for at most the whole round (duration * 1000 ms),
+  // so it lies between all wrong words at the start and all characters at the start.
+  if (!isInt(lead)) return "bad lead";
+  const endMs = duration * 1000;
+  if (lead < -WRONG_WORD_CHARS * (wordsTyped - wordsCorrect) * endMs || lead > correctChars * endMs) return "bad lead";
   return null;
 }
 
-// Best row per name (ties: fewer wrong words, then earlier), for one
-// duration and device since `since`.
+// Board order, best first. Also in BEST_CTE and rankOf.
+const RANK_ORDER = "net_chars DESC, wrong_words ASC, lead DESC, created_at ASC, id ASC";
+
+// Why a row ranks above the next one when both show the same net WPM.
+function tieBreak(a, b) {
+  if (a.net_chars !== b.net_chars) return "chars";
+  if (a.wrong_words !== b.wrong_words) return "wrongWords";
+  if (a.lead !== b.lead) return "lead";
+  return "time";
+}
+
+// Best row per name (RANK_ORDER), for one duration and device since `since`.
 const BEST_CTE = `
   WITH best AS (
     SELECT * FROM (
-      SELECT id, name, name_key, net_wpm10, precision, wrong_words, created_at,
-             ROW_NUMBER() OVER (PARTITION BY name_key ORDER BY net_wpm10 DESC, wrong_words ASC, created_at ASC, id ASC) AS rn
+      SELECT id, name, name_key, net_wpm10, net_chars, lead, precision, wrong_words, created_at,
+             ROW_NUMBER() OVER (PARTITION BY name_key ORDER BY ${RANK_ORDER}) AS rn
       FROM scores WHERE duration = ?1 AND device = ?2 AND created_at >= ?3
     ) WHERE rn = 1
   )`;
 
-async function topRows(env, duration, device, since, limit) {
+// `tieBreak` (only when the next row shows the same net WPM): why this row
+// ranks above it: "chars", "wrongWords", "lead" or "time".
+export async function topRows(env, duration, device, since, limit) {
   const { results } = await env.DB.prepare(
     `${BEST_CTE}
-     SELECT name, net_wpm10, precision, wrong_words, created_at FROM best
-     ORDER BY net_wpm10 DESC, wrong_words ASC, created_at ASC, id ASC LIMIT ?4`,
+     SELECT id, name, net_wpm10, net_chars, lead, precision, wrong_words, created_at FROM best
+     ORDER BY ${RANK_ORDER} LIMIT ?4`,
   )
     .bind(duration, device, since, limit)
     .all();
-  return results.map((r) => ({
-    name: r.name,
-    netWpm10: r.net_wpm10,
-    precision: r.precision,
-    wrongWords: r.wrong_words,
-    date: new Date(r.created_at).toISOString(),
-  }));
+  return results.map((r, i) => {
+    const next = results[i + 1];
+    const row = {
+      name: r.name,
+      netWpm10: r.net_wpm10,
+      precision: r.precision,
+      wrongWords: r.wrong_words,
+      date: new Date(r.created_at).toISOString(),
+    };
+    if (next && next.net_wpm10 === r.net_wpm10) row.tieBreak = tieBreak(r, next);
+    return row;
+  });
 }
 
 // `current`: the player's best on this board is the row just saved.
-async function rankOf(env, duration, device, since, nameKey, rowId) {
+// Rows ahead in RANK_ORDER: DESC columns are negated so one row-value
+// comparison covers the whole order.
+export async function rankOf(env, duration, device, since, nameKey, rowId) {
   const row = await env.DB.prepare(
     `${BEST_CTE}
      SELECT me.id AS id, me.net_wpm10 AS best,
        (SELECT COUNT(*) FROM best b
-         WHERE b.net_wpm10 > me.net_wpm10
-            OR (b.net_wpm10 = me.net_wpm10 AND (b.wrong_words < me.wrong_words
-            OR (b.wrong_words = me.wrong_words AND (b.created_at < me.created_at
-            OR (b.created_at = me.created_at AND b.id < me.id)))))
+         WHERE (-b.net_chars, b.wrong_words, -b.lead, b.created_at, b.id)
+             < (-me.net_chars, me.wrong_words, -me.lead, me.created_at, me.id)
        ) + 1 AS rank
      FROM best me WHERE me.name_key = ?4`,
   )
@@ -247,6 +273,8 @@ async function handleSubmit(request, env) {
     correctLetterKeys: body.correctLetterKeys,
     wordsTyped: body.wordsTyped,
     wordsCorrect: body.wordsCorrect,
+    // An older game sends no lead: 0, so its score still saves.
+    lead: body.lead === undefined ? 0 : body.lead,
   };
   const problem = checkResult(counts);
   if (problem) return fail(request, 400, problem);
@@ -262,13 +290,14 @@ async function handleSubmit(request, env) {
 
   const nameKey = name.toLowerCase();
   const inserted = await env.DB.prepare(
-    `INSERT INTO scores (name, name_key, duration, device, net_wpm10, precision, correct_chars, letter_keys,
-       correct_letter_keys, words_typed, words_correct, wrong_words, created_at, ip_hash)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO scores (name, name_key, duration, device, net_wpm10, net_chars, lead, precision, correct_chars,
+       letter_keys, correct_letter_keys, words_typed, words_correct, wrong_words, created_at, ip_hash)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
-      name, nameKey, duration, device, result.netWpm10, result.precision, counts.correctChars, counts.letterKeys,
-      counts.correctLetterKeys, counts.wordsTyped, counts.wordsCorrect, result.wrongWords, now, hash,
+      name, nameKey, duration, device, result.netWpm10, result.netChars, counts.lead, result.precision,
+      counts.correctChars, counts.letterKeys, counts.correctLetterKeys, counts.wordsTyped, counts.wordsCorrect,
+      result.wrongWords, now, hash,
     )
     .run();
   const rowId = inserted.meta.last_row_id;

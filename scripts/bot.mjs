@@ -295,7 +295,8 @@ async function ensureLocalWorker() {
     fail(
       `local Worker answered HTTP ${res?.status}. Set up the local D1 (cd leaderboard): ` +
         "npx wrangler d1 execute typemaster-leaderboard --local --file=schema.sql " +
-        "(a local D1 from before net WPM scoring needs --file=migrations/0002_net_wpm.sql)",
+        "(a local D1 from before net WPM scoring needs --file=migrations/0002_net_wpm.sql, " +
+        "one from before lead ranking needs npm run migrate:lead:local)",
     );
   }
 }

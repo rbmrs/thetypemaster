@@ -7,7 +7,8 @@ import SaveScore from "./components/SaveScore.jsx";
 import WordDisplay from "./components/WordDisplay.jsx";
 import { strings } from "./i18n.js";
 import { startRound } from "./leaderboard.js";
-import { correctPrefix, formatWpm, scoreRound } from "./scoring.js";
+import { RoundTrace, eventTime } from "./round.js";
+import { correctPrefix, formatWpm, scoreRound, wordStep } from "./scoring.js";
 import { playCorrect, playTimeUp, playWrong, setSoundOn, soundOn, unlockSound } from "./sound.js";
 
 const STATS_KEY = "typeMasterStats";
@@ -92,7 +93,6 @@ function App() {
   const [correctChars, setCorrectChars] = useState(0);
   const [letterKeys, setLetterKeys] = useState(0);
   const [correctLetterKeys, setCorrectLetterKeys] = useState(0);
-  const [startTime, setStartTime] = useState(null);
   const [currentWord, setCurrentWord] = useState("");
   const [timeLeft, setTimeLeft] = useState(30);
   const [timerRunning, setTimerRunning] = useState(false);
@@ -115,6 +115,9 @@ function App() {
   const pageFocusRef = useRef(null);
   // Touch devices only: the real input that opens the phone's keyboard.
   const inputRef = useRef(null);
+  // The round clock and word times for the lead (round.js). Made at the
+  // first letter key; null before it.
+  const traceRef = useRef(null);
 
   // Page language for screen readers, spell check and translation tools.
   useEffect(() => {
@@ -134,13 +137,15 @@ function App() {
   // The round's counts when time is up. The word being typed adds its
   // correct start (no space) and is not a wrong word. These counts go to the
   // server, which works out the score itself.
+  const prefix = gameOver ? correctPrefix(typedText, currentWord) : 0;
   const counts = gameOver
     ? {
-        correctChars: correctChars + correctPrefix(typedText, currentWord),
+        correctChars: correctChars + prefix,
         letterKeys,
         correctLetterKeys,
         wordsTyped: wordsAttempted,
         wordsCorrect,
+        lead: traceRef.current ? traceRef.current.lead(prefix) : 0,
       }
     : null;
   const final = counts && scoreRound({ duration: selectedDuration, ...counts });
@@ -159,23 +164,50 @@ function App() {
     }
   }, [gameOver]);
 
-  useEffect(() => {
-    let interval;
-    if (timerRunning && timeLeft > 0) {
-      interval = setInterval(() => {
-        setTimeLeft((prev) => {
-          if (prev <= 1) {
-            clearInterval(interval);
-            setGameOver(true);
-            setShowResults(true);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
+  // Time is up. Only the first call counts.
+  const endRound = () => {
+    const trace = traceRef.current;
+    if (!trace || trace.ended) return;
+    trace.ended = true;
+    setTimeLeft(0);
+    setGameOver(true);
+    setShowResults(true);
+  };
+
+  // The time of an input on the round clock, or null when it does not
+  // count: the round is over, or the key came at or after the time limit
+  // (that ends the round). Before the first letter it is just the time.
+  const inputTime = (e) => {
+    const t = eventTime(e);
+    const trace = traceRef.current;
+    if (!trace) return t;
+    if (trace.ended) return null;
+    if (trace.over(t)) {
+      endRound();
+      return null;
     }
-    return () => interval && clearInterval(interval);
-  }, [timerRunning, timeLeft]);
+    return t;
+  };
+
+  // The countdown reads the real time left, so it never drifts, and the
+  // round ends at first key + duration. Each tick waits for the next whole
+  // second. A late timer is harmless: inputTime drops keys after the limit.
+  useEffect(() => {
+    const trace = traceRef.current;
+    if (!timerRunning || gameOver || !trace) return;
+    let id;
+    const tick = () => {
+      const left = trace.left(performance.now());
+      if (left <= 0) {
+        endRound();
+        return;
+      }
+      setTimeLeft(Math.ceil(left / 1000));
+      id = setTimeout(tick, left % 1000 || 1000);
+    };
+    tick();
+    return () => clearTimeout(id);
+  }, [timerRunning, gameOver]);
 
   const selectDuration = (seconds) => {
     if (timerRunning) return;
@@ -204,7 +236,7 @@ function App() {
     setCorrectChars(0);
     setLetterKeys(0);
     setCorrectLetterKeys(0);
-    setStartTime(null);
+    traceRef.current = null;
     setTimeLeft(selectedDuration);
     setTimerRunning(false);
     setGameOver(false);
@@ -218,35 +250,40 @@ function App() {
     focusPhoneInput();
   };
 
-  // `pos`, `started` and `word` let the phone input apply several keys from one event.
-  const typeLetter = (letter, pos = typedText.length, started = Boolean(startTime), word = currentWord) => {
+  // `t`: the key's time (inputTime). `pos` and `word` let the phone input
+  // apply several keys from one event.
+  const typeLetter = (letter, t, pos = typedText.length, word = currentWord) => {
     // A letter key is correct when it matches the word's letter at that position.
     const isCorrect = word[pos]?.toLowerCase() === letter;
     setLetterKeys((n) => n + 1);
     if (isCorrect) setCorrectLetterKeys((n) => n + 1);
-    setTypedText((t) => t + letter);
+    setTypedText((s) => s + letter);
     setActiveKey(letter);
     setKeyStatus(isCorrect ? "correct" : "incorrect");
-    if (!started) {
-      setStartTime(Date.now());
+    if (!traceRef.current) {
+      // The first letter starts the round.
+      traceRef.current = new RoundTrace(selectedDuration, t);
       setTimerRunning(true);
       // Ask for a round token; if this fails the game still works, only saving is off.
       setRoundToken(startRound(selectedDuration));
     }
+    traceRef.current.letter(t);
   };
 
   const backspace = () => {
     setTypedText((t) => t.slice(0, -1));
+    traceRef.current?.backspace();
     setActiveKey("Backspace");
     setKeyStatus("");
   };
 
-  // Returns the next word to type. `chain` lets the phone input submit more
-  // than one word in a single event (see WordDisplay).
-  const submitWord = (text = typedText, word = currentWord, chain = false) => {
+  // Returns the next word to type. `t`: the key's time (inputTime). `chain`
+  // lets the phone input submit more than one word in a single event (see WordDisplay).
+  const submitWord = (t, text = typedText, word = currentWord, chain = false) => {
     if (text.trim() === "") return word;
     setWordsAttempted((n) => n + 1);
     const isCorrect = text.trim().toLowerCase() === word.toLowerCase();
+    traceRef.current?.word(t, wordStep(word, isCorrect));
     if (isCorrect) {
       setWordsCorrect((n) => n + 1);
       // Its letters and the space.
@@ -269,13 +306,14 @@ function App() {
     if (e.target instanceof HTMLInputElement) return;
     // Space and Enter on the flag or sound button press it; they are not typing.
     if (e.target instanceof Element && e.target.closest(".lang-menu, .sound-toggle") && !/^[a-z]$/i.test(e.key)) return;
-    if (/^[a-z]$/i.test(e.key)) {
-      typeLetter(e.key.toLowerCase());
-    } else if (e.key === "Backspace") {
-      backspace();
-    } else if (e.key === " " || e.key === "Space" || e.key === "Enter") {
-      submitWord();
-    }
+    const letter = /^[a-z]$/i.test(e.key);
+    const send = e.key === " " || e.key === "Space" || e.key === "Enter";
+    if (!letter && !send && e.key !== "Backspace") return;
+    const t = inputTime(e);
+    if (t === null) return;
+    if (letter) typeLetter(e.key.toLowerCase(), t);
+    else if (send) submitWord(t);
+    else backspace();
   };
   const keyDownRef = useRef(handleKeyDown);
   keyDownRef.current = handleKeyDown;
@@ -286,6 +324,9 @@ function App() {
   // and the score are the same.
   const handlePhoneInput = (e) => {
     if (gameOver || showBoard) return;
+    // After the time limit the change is dropped; React puts the box back.
+    const t = inputTime(e);
+    if (t === null) return;
     const value = e.target.value.toLowerCase();
     let keep = 0;
     while (keep < typedText.length && value[keep] === typedText[keep]) keep++;
@@ -295,15 +336,13 @@ function App() {
     // pressing the same keys would see them.
     let text = typedText.slice(0, keep);
     let word = currentWord;
-    let started = Boolean(startTime);
     for (const ch of value.slice(keep)) {
       if (/^[a-z]$/.test(ch)) {
-        typeLetter(ch, text.length, started, word);
+        typeLetter(ch, t, text.length, word);
         text += ch;
-        started = true;
       } else if (/\s/.test(ch) && text !== "") {
         // A Space on an empty box does nothing, as on desktop.
-        word = submitWord(text, word, true);
+        word = submitWord(t, text, word, true);
         text = "";
       }
     }
@@ -312,7 +351,9 @@ function App() {
   const handlePhoneKeyDown = (e) => {
     if (e.key !== "Enter") return;
     e.preventDefault();
-    if (!gameOver && !showBoard) submitWord();
+    if (gameOver || showBoard) return;
+    const t = inputTime(e);
+    if (t !== null) submitWord(t);
   };
 
   // Called inside the tap, so iOS opens the keyboard. Clear readOnly first:
@@ -327,14 +368,16 @@ function App() {
   // On-screen keyboard input.
   const handleVirtualKey = (key) => {
     if (gameOver) return;
+    const t = inputTime();
+    if (t === null) return;
     if (key === "Backspace") {
       backspace();
     } else if (key === " ") {
       setActiveKey(" ");
       setKeyStatus("");
-      submitWord();
+      submitWord(t);
     } else {
-      typeLetter(key);
+      typeLetter(key, t);
     }
   };
 

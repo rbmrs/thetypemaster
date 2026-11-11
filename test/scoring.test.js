@@ -1,37 +1,50 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { correctPrefix, formatWpm, scoreRound } from "../src/scoring.js";
+import { WRONG_WORD_CHARS, correctPrefix, formatWpm, roundLead, scoreRound, wordStep } from "../src/scoring.js";
+import { RoundTrace } from "../src/round.js";
 import { checkResult } from "../leaderboard/src/index.js";
 
 // Plays keys on target words the way App.jsx counts them. `keys` per word:
 // letters, "<" for Backspace, " " to send. A last entry without " " is the
-// unfinished word when time runs out.
-function play(duration, words) {
+// unfinished word when time runs out. One key every `msPerKey` ms from 0;
+// keys at or after the time limit do not count, as in the game.
+function play(duration, words, msPerKey = 100) {
   let correctChars = 0, letterKeys = 0, correctLetterKeys = 0, wordsTyped = 0, wordsCorrect = 0;
   let typed = "";
   let word = "";
+  let t = 0;
+  const trace = new RoundTrace(duration, 0);
   for (const [target, keys] of words) {
     word = target;
     typed = "";
     for (const k of keys) {
-      if (k === "<") typed = typed.slice(0, -1);
-      else if (k === " ") {
+      const at = t;
+      t += msPerKey;
+      if (trace.over(at)) break;
+      if (k === "<") {
+        typed = typed.slice(0, -1);
+        trace.backspace();
+      } else if (k === " ") {
         if (!typed) continue;
         wordsTyped++;
-        if (typed === word) {
+        const ok = typed === word;
+        if (ok) {
           wordsCorrect++;
           correctChars += word.length + 1;
         }
+        trace.word(at, wordStep(word, ok));
         typed = "";
       } else {
         letterKeys++;
         if (word[typed.length] === k) correctLetterKeys++;
         typed += k;
+        trace.letter(at);
       }
     }
   }
-  correctChars += correctPrefix(typed, word);
-  return { duration, correctChars, letterKeys, correctLetterKeys, wordsTyped, wordsCorrect };
+  const prefix = correctPrefix(typed, word);
+  correctChars += prefix;
+  return { duration, correctChars, letterKeys, correctLetterKeys, wordsTyped, wordsCorrect, lead: trace.lead(prefix) };
 }
 
 test("fixed typo: cst, delete st, at = 5 letter keys, 4 correct = 80%", () => {
@@ -84,7 +97,9 @@ test("ties: a skipped word always loses", () => {
 });
 
 // A plausible 60 s round: 50 correct 5-letter words, 2 wrong, a few typos.
-const valid = { duration: 60, correctChars: 300, letterKeys: 270, correctLetterKeys: 262, wordsTyped: 52, wordsCorrect: 50 };
+const valid = {
+  duration: 60, correctChars: 300, letterKeys: 270, correctLetterKeys: 262, wordsTyped: 52, wordsCorrect: 50, lead: 9_000_000,
+};
 
 test("valid rounds pass", () => {
   assert.equal(checkResult(valid), null);
@@ -106,7 +121,7 @@ test("inflated correctChars fail", () => {
   // Fewer than 4 per correct word.
   assert.equal(checkResult({ ...valid, correctChars: 199 }), "too few characters");
   // Character WPM over 250.
-  const fast = { duration: 60, wordsTyped: 250, wordsCorrect: 250, letterKeys: 1300, correctLetterKeys: 1300 };
+  const fast = { duration: 60, wordsTyped: 250, wordsCorrect: 250, letterKeys: 1300, correctLetterKeys: 1300, lead: 0 };
   assert.equal(checkResult({ ...fast, correctChars: 1251 }), "wpm too high");
 });
 
@@ -119,4 +134,73 @@ test("bad counts fail", () => {
   assert.equal(checkResult({ ...valid, letterKeys: -1 }), "bad numbers");
   // An old client's body (score, wpm, accuracy) has no counts.
   assert.equal(checkResult({ duration: 60, score: 100, wpm: 50, accuracy: 90, wordsTyped: 52, wordsCorrect: 50 }), "bad numbers");
+});
+
+// --- lead ---------------------------------------------------------------------
+
+test("lead: each step counts for the rest of the round", () => {
+  // One correct 3-letter word sent at 0 ms holds +4 for all 30 s.
+  assert.equal(roundLead([[0, 4]], 30), 4 * 30_000);
+  // "cat " at 1 s (+4), a wrong word at 2 s (-5), then "ta" of "table" with
+  // its last correct letter at 2.5 s (+2): 4*29000 - 5*28000 + 2*27500.
+  assert.equal(roundLead([[1000, 4], [2000, -5], [2500, 2]], 30), 31_000);
+  // Times are floored to whole ms and kept inside the round.
+  assert.equal(roundLead([[999.9, 1]], 1), 1);
+  assert.equal(roundLead([[-5, 1], [40_000, 3]], 30), 30_000);
+  assert.equal(wordStep("house", true), 6);
+  assert.equal(wordStep("house", false), -WRONG_WORD_CHARS);
+});
+
+test("lead: same score, the faster start was ahead for longer", () => {
+  const words = [["cat", "cat "], ["dog", "dog "]];
+  const quick = play(30, words, 100);
+  const slow = play(30, words, 300);
+  assert.equal(scoreRound(quick).netWpm10, scoreRound(slow).netWpm10);
+  assert.ok(quick.lead > slow.lead);
+  // cat sent at 300 ms, dog at 700 ms: 4*29700 + 4*29300.
+  assert.equal(quick.lead, 4 * 29_700 + 4 * 29_300);
+});
+
+test("lead: the unfinished word counts at its last correct letter", () => {
+  // "tabxe" on "table": prefix "tab", last correct letter "b" at 200 ms.
+  const r = play(30, [["table", "tabxe"]]);
+  assert.equal(r.correctChars, 3);
+  assert.equal(r.lead, 3 * (30_000 - 200));
+  // A deleted letter's time is gone: "tx<b" -> "tb", "b" at 300 ms.
+  assert.equal(play(30, [["tbd", "tx<b"]]).lead, 2 * (30_000 - 300));
+});
+
+test("lead: a wrong word drags it down", () => {
+  const clean = play(30, [["cat", "cat "]]);
+  const wrong = play(30, [["cat", "cat "], ["dog", "dgo "]]);
+  assert.ok(wrong.lead < clean.lead);
+  assert.equal(checkResult(wrong), null);
+});
+
+test("round clock: keys at or after the time limit do not count", () => {
+  const trace = new RoundTrace(30, 1000);
+  assert.equal(trace.over(1000 + 29_999.9), false);
+  assert.equal(trace.over(1000 + 30_000), true);
+  assert.equal(trace.left(1000), 30_000);
+  assert.equal(trace.left(1000 + 29_000.5), 999.5);
+  assert.equal(trace.left(99_999), 0);
+  // 1 s round, one key per 100 ms: keys at 0..900 ms count, so 10 letters.
+  const r = play(1, [["abcdefghijkl", "abcdefghijkl"]]);
+  assert.equal(r.letterKeys, 10);
+  assert.equal(r.correctChars, 10);
+});
+
+test("lead bounds: between -5 per wrong word and every character, for the whole round", () => {
+  const endMs = valid.duration * 1000;
+  assert.equal(checkResult({ ...valid, lead: valid.correctChars * endMs }), null);
+  assert.equal(checkResult({ ...valid, lead: valid.correctChars * endMs + 1 }), "bad lead");
+  assert.equal(checkResult({ ...valid, lead: -5 * 2 * endMs }), null);
+  assert.equal(checkResult({ ...valid, lead: -5 * 2 * endMs - 1 }), "bad lead");
+  assert.equal(checkResult({ ...valid, lead: 1.5 }), "bad lead");
+  assert.equal(checkResult({ ...valid, lead: "9000000" }), "bad lead");
+  // An older game sends no lead: it counts as 0 and the round still saves.
+  assert.equal(checkResult({ ...valid, lead: undefined }), null);
+  const { lead, ...noLead } = valid;
+  assert.equal(checkResult(noLead), null);
+  assert.equal(checkResult({ ...valid, lead: null }), "bad lead");
 });

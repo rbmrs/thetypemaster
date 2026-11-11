@@ -1251,6 +1251,16 @@ html.touch .top-tools {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Under a name: why it ranks above the next row with the same score. */
+.lb-table .lb-tie {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 0.72rem;
+  font-weight: 400;
+  line-height: 1.2;
+  color: var(--muted);
+}
 .lb-table tr.lb-me td {
   background-color: var(--word-bg-current);
   font-weight: 600;
