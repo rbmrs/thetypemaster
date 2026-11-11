@@ -27,7 +27,7 @@ Cloudflare Worker + D1 behind the game's leaderboard. Not part of the Vite build
 - `tieBreak` on a `/top` row: only when the next row has the same `cpm`; why this row is above it: `chars` (more net characters), `wrongWords`, `lead` or `time` (earlier). The game shows it as a short note, never the lead number.
 - Count checks: `4 × wordsCorrect ≤ correctChars ≤ 5.96 × wc + 4.2 × √wc + 13`; `correctChars ÷ 5` per minute under 250; `correctChars ≤ letterKeys + wc`; `correctChars − wc ≤ correctLetterKeys ≤ letterKeys`; `lead`, when sent, an integer with `−5 × wrongWords × D × 1000 ≤ lead ≤ correctChars × D × 1000` (D = round length in s). The word lists must keep 3–8 letters (`npm test` in the game root checks it).
 - Weekly board: from Monday 00:00 UTC.
-- A submit is rejected when the token is bad, used, older than 10 min, or younger than the round length minus 2s; when the counts do not fit the game; when the name is not allowed; or after 10 attempts per hour from one IP (only a salted hash is stored).
+- A submit is rejected when the token is bad, used, older than 10 min, or younger than the round length minus 2s; when the counts do not fit the game; when the name is not allowed; or after 120 attempts per hour from one IP (only a salted hash is stored).
 - CORS: `https://rbmrs.dev` and `http://localhost:*`.
 
 ## Commands

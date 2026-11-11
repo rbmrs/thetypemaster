@@ -673,27 +673,27 @@ function App() {
                     <span className="result-value">{wordsCorrect}</span>
                   </div>
                 </div>
-                {saved && isPhone ? (
+                {savedRank}
+                {saved && isPhone && (
                   <button type="button" className="board-page-button board-page-open" ref={pageFocusRef} onClick={() => setBoardPage(true)}>
                     <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16" aria-hidden="true">
                       <path d={TROPHY_ICON} />
                     </svg>
                     {t.leaderboard}
                   </button>
-                ) : saved ? (
-                  savedRank
-                ) : (
-                  wordsCorrect > 0 && (
-                    <SaveScore
-                      lang={lang}
-                      token={roundToken}
-                      result={counts}
-                      onSaved={(data) => {
-                        setSaved(data);
-                        setBoardPage(true);
-                      }}
-                    />
-                  )
+                )}
+                {wordsCorrect > 0 && (
+                  <SaveScore
+                    lang={lang}
+                    token={roundToken}
+                    result={counts}
+                    saved={Boolean(saved)}
+                    onSaved={(data, auto) => {
+                      setSaved(data);
+                      // Phones open the board page after a click, not on their own.
+                      if (!auto) setBoardPage(true);
+                    }}
+                  />
                 )}
                 <button className="retry-button" onClick={resetGame}>
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20">

@@ -1069,7 +1069,8 @@ html.touch .top-tools {
 }
 .modal-board {
   grid-column: 2;
-  grid-row: 2 / span 4;
+  /* Title, results, "Saved as", the save row and Try Again. */
+  grid-row: 2 / span 5;
   min-width: 0;
 }
 @media (max-width: 760px) {
@@ -1140,6 +1141,39 @@ html.touch .top-tools {
   margin: 0.4rem 0 0;
   text-align: left;
 }
+/* Rounds that save on their own: status, Retry and "Change name". */
+.lb-auto {
+  margin-top: -0.75rem;
+}
+.lb-rank ~ .lb-save {
+  margin-top: 0.5rem;
+}
+.lb-auto .lb-save-note {
+  text-align: center;
+}
+.lb-auto .lb-save-note:empty {
+  margin: 0;
+}
+.lb-auto-row {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.4rem;
+}
+.lb-change {
+  font: inherit;
+  font-size: 0.8rem;
+  padding: 0.15rem 0.25rem;
+  color: var(--muted);
+  background: none;
+  border: none;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.lb-change:hover {
+  color: var(--text);
+}
 .lb-rank {
   margin: -0.5rem 0 0;
   color: var(--muted);
@@ -1202,6 +1236,12 @@ html.touch .top-tools {
 }
 .board-page-open {
   width: 100%;
+}
+.lb-rank + .board-page-open {
+  margin-top: 0.75rem;
+}
+html.touch .board-page-open + .lb-save {
+  margin-top: 0.6rem;
 }
 .board-page-open svg {
   color: var(--warn);
