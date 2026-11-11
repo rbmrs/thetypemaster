@@ -11,6 +11,7 @@ Live: https://rbmrs.dev/type-master (standalone: https://rbmrs.dev/thetypemaster
 - Results at the end: score, words per minute, accuracy, words typed, correct words.
 - Stats saved in `localStorage` under `typeMasterStats`.
 - Language menu (flag, top right): English or Brazilian Portuguese. It sets the words and all game text. The choice is saved under `typeMasterLang`; without one, the browser language decides.
+- Quiet sound cues, made with Web Audio: a light tick for a correct word, a low tone for a wrong word, a chime when time is up. No sound per letter. The speaker button (top right) turns them on or off; the choice is saved under `typeMasterSound`. On by default.
 - Leaderboard per round length (all-time and this week), with separate desktop and phone boards. The player sees the board for their device, marked by a small icon. Save from the results card; the last name is kept under `typeMasterName`. The standalone page also has a Leaderboard link. Backend: `leaderboard/` (Cloudflare Worker + D1, see its README).
 
 ### Scoring
@@ -39,6 +40,7 @@ npm run preview  # serve the production build
 index.html                  entry HTML, includes word-layout CSS overrides
 src/main.jsx                React root
 src/App.jsx                 game state, timer, scoring, input, results modal
+src/sound.js                sound cues (Web Audio) and the saved on/off choice
 src/leaderboard.js          leaderboard API client, Worker URL (VITE_LEADERBOARD_URL), random names
 src/i18n.js                 game text in English and Portuguese
 src/components/Leaderboard.jsx  top 10 table with round length and period tabs, and a device icon

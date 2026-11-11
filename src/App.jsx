@@ -7,6 +7,7 @@ import SaveScore from "./components/SaveScore.jsx";
 import WordDisplay from "./components/WordDisplay.jsx";
 import { strings } from "./i18n.js";
 import { startRound } from "./leaderboard.js";
+import { playCorrect, playTimeUp, playWrong, setSoundOn, soundOn, unlockSound } from "./sound.js";
 
 const STATS_KEY = "typeMasterStats";
 const THEME_KEY = "theme";
@@ -14,6 +15,10 @@ const LANG_KEY = "typeMasterLang";
 
 const RESET_ICON =
   "M17.65,6.35C16.2,4.9 14.21,4 12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20C15.73,20 18.84,17.45 19.73,14H17.65C16.83,16.33 14.61,18 12,18A6,6 0 0,1 6,12A6,6 0 0,1 12,6C13.66,6 15.14,6.69 16.22,7.78L13,11H20V4L17.65,6.35Z";
+const SOUND_ON_ICON =
+  "M3,9V15H7L12,20V4L7,9H3M16.5,12C16.5,10.23 15.5,8.71 14,7.97V16.02C15.5,15.29 16.5,13.76 16.5,12M14,3.23V5.29C16.89,6.15 19,8.83 19,12C19,15.17 16.89,17.84 14,18.7V20.77C18,19.86 21,16.28 21,12C21,7.72 18,4.14 14,3.23Z";
+const SOUND_OFF_ICON =
+  "M3,9H7L12,4V20L7,15H3V9M16.59,12L14,9.41L15.41,8L18,10.59L20.59,8L22,9.41L19.41,12L22,14.59L20.59,16L18,13.41L15.41,16L14,14.59L16.59,12Z";
 const INFO_ICON =
   "M13,9H11V7H13M13,17H11V11H13M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z";
 
@@ -94,6 +99,7 @@ function App() {
   const [selectedDuration, setSelectedDuration] = useState(30);
   const [lang, setLang] = useState(startLang);
   const [langMenuOpen, setLangMenuOpen] = useState(false);
+  const [sound, setSound] = useState(soundOn);
   const t = strings(lang);
   // Leaderboard: round token promise (from POST /start), the submit reply,
   // and the standalone board overlay.
@@ -239,8 +245,10 @@ function App() {
     if (isCorrect) {
       setWordsCorrect((n) => n + 1);
       setScore((s) => s + 5);
+      playCorrect();
     } else {
       setScore((s) => Math.max(0, s - 3));
+      playWrong();
     }
     const typed = text.trim();
     setTypedText("");
@@ -254,8 +262,8 @@ function App() {
   const handleKeyDown = (e) => {
     if (gameOver || showBoard || langMenuOpen) return;
     if (e.target instanceof HTMLInputElement) return;
-    // Space and Enter on the flag button press it; they are not typing.
-    if (e.target instanceof Element && e.target.closest(".lang-menu") && !/^[a-z]$/i.test(e.key)) return;
+    // Space and Enter on the flag or sound button press it; they are not typing.
+    if (e.target instanceof Element && e.target.closest(".lang-menu, .sound-toggle") && !/^[a-z]$/i.test(e.key)) return;
     if (/^[a-z]$/i.test(e.key)) {
       typeLetter(e.key.toLowerCase());
     } else if (e.key === "Backspace") {
@@ -367,6 +375,33 @@ function App() {
     return () => document.removeEventListener("click", onClick);
   }, []);
 
+  // Browsers allow sound only after a user gesture: make the audio context
+  // on the first key press or tap. Touch screens count only the end of a tap.
+  useEffect(() => {
+    const unlock = () => unlockSound();
+    const events = ["keydown", "pointerdown", "pointerup", "touchend"];
+    for (const ev of events) document.addEventListener(ev, unlock, true);
+    return () => {
+      for (const ev of events) document.removeEventListener(ev, unlock, true);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (gameOver) playTimeUp();
+  }, [gameOver]);
+
+  // A mouse click or tap gives focus back to the game, so the next Space
+  // submits a word. Space or Enter on the focused button keeps focus on it.
+  const toggleSound = (e) => {
+    const next = !sound;
+    setSound(next);
+    setSoundOn(next);
+    if (e.detail > 0) {
+      e.currentTarget.blur();
+      if (timerRunning && !gameOver) focusPhoneInput();
+    }
+  };
+
   // Close the keyboard when time is up, so the results card is in full view.
   useEffect(() => {
     if (IS_TOUCH && gameOver) inputRef.current?.blur();
@@ -454,9 +489,23 @@ function App() {
         </nav>
       </div>
 
-      {!timerRunning && (
-        <LangMenu lang={lang} onSelect={selectLang} open={langMenuOpen} setOpen={setLangMenuOpen} />
-      )}
+      <div className="top-tools">
+        {!timerRunning && (
+          <LangMenu lang={lang} onSelect={selectLang} open={langMenuOpen} setOpen={setLangMenuOpen} />
+        )}
+        <button
+          type="button"
+          className="sound-toggle"
+          aria-label={t.sound}
+          aria-pressed={sound}
+          title={sound ? t.soundOn : t.soundOff}
+          onClick={toggleSound}
+        >
+          <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18" aria-hidden="true">
+            <path d={sound ? SOUND_ON_ICON : SOUND_OFF_ICON} />
+          </svg>
+        </button>
+      </div>
 
       <div className="timer-container">
         <div className="timer-display">
