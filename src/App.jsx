@@ -338,11 +338,17 @@ function App() {
     }
   };
 
-  // Follow the rbmrs.dev theme toggle live. Same origin, so a toggle on the
-  // parent page fires a "storage" event here.
+  // Follow the rbmrs.dev theme toggle live. The site keeps the pick in
+  // sessionStorage. The parent page and this iframe share it, so a toggle
+  // there fires a "storage" event here. No pick means follow the system.
   useEffect(() => {
     const onStorage = (e) => {
       if (e.key !== THEME_KEY) return;
+      try {
+        if (e.storageArea !== sessionStorage) return;
+      } catch {
+        return;
+      }
       const root = document.documentElement;
       if (e.newValue === "light" || e.newValue === "dark") root.setAttribute("data-theme", e.newValue);
       else root.removeAttribute("data-theme");
