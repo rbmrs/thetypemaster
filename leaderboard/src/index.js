@@ -1,8 +1,8 @@
 // Type Master leaderboard: Cloudflare Worker + D1.
 //
 //   POST /start  {duration, device}          -> {token}
-//   POST /submit {token, name, score, wpm, accuracy, wordsTyped, wordsCorrect}
-//                                            -> {rank, top}
+//   POST /submit {token, name, correctChars, letterKeys, correctLetterKeys, wordsTyped, wordsCorrect}
+//                                            -> {name, device, result, rank, top}
 //   GET  /top?duration=30&board=alltime|weekly&device=desktop|phone&limit=10 -> {rows}
 //
 // Desktop and phone rounds have separate boards. The device comes from the
@@ -12,14 +12,21 @@
 // Anti-cheat is "good enough": a signed, single-use round token with a
 // minimum and maximum age, plausibility checks against the game's scoring,
 // and a per-IP rate limit (only a salted hash of the IP is stored).
+//
+// The game sends raw counts; the Worker computes net WPM and precision
+// itself with the game's own scoring code (src/scoring.js).
+
+import { scoreRound } from "../../src/scoring.js";
 
 const DURATIONS = [30, 60, 180];
 const DEVICES = ["desktop", "phone"];
 const START_SLACK_MS = 2000; // a submit may come this much before `duration` elapses
 const TOKEN_MAX_AGE_MS = 10 * 60 * 1000;
 const RATE_LIMIT = 10; // submit attempts per hour per IP
-const MAX_WPM = 250;
-const MAX_WORD_LEN = 8; // longest word in src/words.js
+const MAX_WPM = 250; // character WPM (correct characters / 5 per minute)
+const MAX_WORD_LEN = 8; // longest word in src/words.js and src/words-pt.js (test/words.test.js)
+const MIN_WORD_LEN = 3; // shortest word, same lists
+const MAX_KEYS_PER_SEC = 25; // letter keys, a loose cap
 const TOP_CACHE_SECONDS = 30;
 
 const ALLOWED_ORIGIN = "https://rbmrs.dev";
@@ -121,41 +128,35 @@ export function cleanName(raw) {
   return name;
 }
 
-// Returns an error string, or null when the result is plausible.
-export function checkResult({ duration, score, wpm, accuracy, wordsTyped, wordsCorrect }) {
-  if (![score, wpm, accuracy, wordsTyped, wordsCorrect].every(isInt)) return "bad numbers";
-  if (score < 0 || wpm < 0 || wordsTyped < 1 || wordsCorrect < 0) return "bad numbers";
+// Returns an error string, or null when the counts are plausible.
+export function checkResult({ duration, correctChars, letterKeys, correctLetterKeys, wordsTyped, wordsCorrect }) {
+  const nums = [correctChars, letterKeys, correctLetterKeys, wordsTyped, wordsCorrect];
+  if (!nums.every(isInt) || nums.some((n) => n < 0) || wordsTyped < 1) return "bad numbers";
   if (wordsCorrect > wordsTyped) return "wordsCorrect > wordsTyped";
-  if (accuracy < 0 || accuracy > 100) return "bad accuracy";
-  if (wpm > MAX_WPM) return "wpm too high";
-
-  const minutes = duration / 60;
-  // Words correct over the full round. The game's final WPM uses the same
-  // full-round time, so it should match this (minus timer drift).
-  const roundWpm = wordsCorrect / minutes;
-  if (roundWpm > MAX_WPM) return "too many words";
-  if (wpm < Math.floor(roundWpm * (duration / (duration + 3))) - 1) return "wpm does not match words";
   if (wordsTyped > 8 * duration) return "too many words";
+  if (letterKeys > MAX_KEYS_PER_SEC * duration) return "too many keys";
+  if (correctLetterKeys > letterKeys) return "correctLetterKeys > letterKeys";
 
-  const expectedAccuracy = Math.round((wordsCorrect / wordsTyped) * 100);
-  if (Math.abs(accuracy - expectedAccuracy) > 1) return "accuracy does not match words";
-
-  // Game scoring: +1 correct letter, -1 wrong letter, +5 correct word,
-  // -3 wrong word, never below 0. A correct word gives at most len+5, a
-  // wrong word at most len correct letters. Slack covers retyping letters
-  // after a backspace and the floor at 0.
-  const wrong = wordsTyped - wordsCorrect;
-  const maxScore = Math.ceil(1.15 * (wordsCorrect * (MAX_WORD_LEN + 5) + wrong * MAX_WORD_LEN)) + 20;
-  if (score > maxScore) return "score too high";
+  // Each correct word gives its letters + 1 (space). Shortest word: 3 letters.
+  const wc = wordsCorrect;
+  if (correctChars < (MIN_WORD_LEN + 1) * wc) return "too few characters";
+  // Mean word length + 1 is at most 5.96 (pt list 5.952, sd about 1.03): allow 4.2
+  // standard deviations, 5 more, and the unfinished last word's prefix.
+  if (correctChars > 5.96 * wc + 4.2 * Math.sqrt(wc) + 5 + MAX_WORD_LEN) return "too many characters";
+  if ((correctChars * 12) / duration > MAX_WPM) return "wpm too high";
+  // Every counted letter was a letter key, a correct one at that position.
+  if (correctChars > letterKeys + wc) return "characters do not match keys";
+  if (correctChars - wc > correctLetterKeys) return "characters do not match keys";
   return null;
 }
 
-// Best row per name (ties: higher WPM, then earlier), for one duration and device since `since`.
+// Best row per name (ties: fewer wrong words, then earlier), for one
+// duration and device since `since`.
 const BEST_CTE = `
   WITH best AS (
     SELECT * FROM (
-      SELECT name, name_key, score, wpm, accuracy, created_at,
-             ROW_NUMBER() OVER (PARTITION BY name_key ORDER BY score DESC, wpm DESC, created_at ASC, id ASC) AS rn
+      SELECT id, name, name_key, net_wpm10, precision, wrong_words, created_at,
+             ROW_NUMBER() OVER (PARTITION BY name_key ORDER BY net_wpm10 DESC, wrong_words ASC, created_at ASC, id ASC) AS rn
       FROM scores WHERE duration = ?1 AND device = ?2 AND created_at >= ?3
     ) WHERE rn = 1
   )`;
@@ -163,33 +164,36 @@ const BEST_CTE = `
 async function topRows(env, duration, device, since, limit) {
   const { results } = await env.DB.prepare(
     `${BEST_CTE}
-     SELECT name, score, wpm, accuracy, created_at FROM best
-     ORDER BY score DESC, wpm DESC, created_at ASC LIMIT ?4`,
+     SELECT name, net_wpm10, precision, wrong_words, created_at FROM best
+     ORDER BY net_wpm10 DESC, wrong_words ASC, created_at ASC, id ASC LIMIT ?4`,
   )
     .bind(duration, device, since, limit)
     .all();
   return results.map((r) => ({
     name: r.name,
-    score: r.score,
-    wpm: r.wpm,
-    accuracy: r.accuracy,
+    netWpm10: r.net_wpm10,
+    precision: r.precision,
+    wrongWords: r.wrong_words,
     date: new Date(r.created_at).toISOString(),
   }));
 }
 
-async function rankOf(env, duration, device, since, nameKey) {
+// `current`: the player's best on this board is the row just saved.
+async function rankOf(env, duration, device, since, nameKey, rowId) {
   const row = await env.DB.prepare(
     `${BEST_CTE}
-     SELECT me.score AS best,
+     SELECT me.id AS id, me.net_wpm10 AS best,
        (SELECT COUNT(*) FROM best b
-         WHERE b.score > me.score
-            OR (b.score = me.score AND (b.wpm > me.wpm OR (b.wpm = me.wpm AND b.created_at < me.created_at)))
+         WHERE b.net_wpm10 > me.net_wpm10
+            OR (b.net_wpm10 = me.net_wpm10 AND (b.wrong_words < me.wrong_words
+            OR (b.wrong_words = me.wrong_words AND (b.created_at < me.created_at
+            OR (b.created_at = me.created_at AND b.id < me.id)))))
        ) + 1 AS rank
      FROM best me WHERE me.name_key = ?4`,
   )
     .bind(duration, device, since, nameKey)
     .first();
-  return row ? { rank: row.rank, best: row.best } : null;
+  return row ? { rank: row.rank, best: row.best, current: row.id === rowId } : null;
 }
 
 // --- routes ----------------------------------------------------------------
@@ -235,16 +239,18 @@ async function handleSubmit(request, env) {
   const name = cleanName(body.name);
   if (!name) return fail(request, 400, "bad name");
 
-  const result = {
+  // Only the counts are read; any score the client sends is ignored.
+  const counts = {
     duration,
-    score: body.score,
-    wpm: body.wpm,
-    accuracy: body.accuracy,
+    correctChars: body.correctChars,
+    letterKeys: body.letterKeys,
+    correctLetterKeys: body.correctLetterKeys,
     wordsTyped: body.wordsTyped,
     wordsCorrect: body.wordsCorrect,
   };
-  const problem = checkResult(result);
+  const problem = checkResult(counts);
   if (problem) return fail(request, 400, problem);
+  const result = scoreRound(counts);
 
   // Single use: the primary key rejects a second insert of the same nonce.
   try {
@@ -255,17 +261,22 @@ async function handleSubmit(request, env) {
   }
 
   const nameKey = name.toLowerCase();
-  await env.DB.prepare(
-    `INSERT INTO scores (name, name_key, duration, device, score, wpm, accuracy, words_typed, words_correct, created_at, ip_hash)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  const inserted = await env.DB.prepare(
+    `INSERT INTO scores (name, name_key, duration, device, net_wpm10, precision, correct_chars, letter_keys,
+       correct_letter_keys, words_typed, words_correct, wrong_words, created_at, ip_hash)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
-    .bind(name, nameKey, duration, device, result.score, result.wpm, result.accuracy, result.wordsTyped, result.wordsCorrect, now, hash)
+    .bind(
+      name, nameKey, duration, device, result.netWpm10, result.precision, counts.correctChars, counts.letterKeys,
+      counts.correctLetterKeys, counts.wordsTyped, counts.wordsCorrect, result.wrongWords, now, hash,
+    )
     .run();
+  const rowId = inserted.meta.last_row_id;
 
   const week = weekStart(now);
   const [allRank, weekRank, allTop, weekTop] = await Promise.all([
-    rankOf(env, duration, device, 0, nameKey),
-    rankOf(env, duration, device, week, nameKey),
+    rankOf(env, duration, device, 0, nameKey, rowId),
+    rankOf(env, duration, device, week, nameKey, rowId),
     topRows(env, duration, device, 0, 10),
     topRows(env, duration, device, week, 10),
   ]);
@@ -279,6 +290,7 @@ async function handleSubmit(request, env) {
   return json(request, 200, {
     name,
     device,
+    result,
     rank: { alltime: allRank, weekly: weekRank },
     top: { alltime: allTop, weekly: weekTop },
   });

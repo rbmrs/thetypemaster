@@ -7,6 +7,7 @@ import SaveScore from "./components/SaveScore.jsx";
 import WordDisplay from "./components/WordDisplay.jsx";
 import { strings } from "./i18n.js";
 import { startRound } from "./leaderboard.js";
+import { correctPrefix, formatWpm, scoreRound } from "./scoring.js";
 import { playCorrect, playTimeUp, playWrong, setSoundOn, soundOn, unlockSound } from "./sound.js";
 
 const STATS_KEY = "typeMasterStats";
@@ -72,11 +73,11 @@ const TROPHY_ICON =
   "M7 4V2h10v2h4v3a4 4 0 0 1-4 4h-.35A5 5 0 0 1 13 13.9V17h3v2H8v-2h3v-3.1A5 5 0 0 1 7.35 11H7a4 4 0 0 1-4-4V4h4Zm0 2H5v1a2 2 0 0 0 2 2V6Zm10 0v3a2 2 0 0 0 2-2V6h-2Z";
 
 // The server ranks each player's best score. The rank belongs to this round
-// only when the round is that best; show it only when it makes the board.
-function boardPlaces(rank, score, labels) {
+// only when the round is that best (`current`); show it only when it makes the board.
+function boardPlaces(rank, labels) {
   return ["alltime", "weekly"]
     .map((id) => ({ id, label: labels[id], r: rank?.[id] }))
-    .filter(({ r }) => r && score >= r.best && r.rank <= BOARD_SIZE)
+    .filter(({ r }) => r && r.current && r.rank <= BOARD_SIZE)
     .map(({ id, label, r }) => ({ id, text: `#${r.rank} ${label}` }));
 }
 
@@ -86,15 +87,17 @@ function App() {
   const [keyStatus, setKeyStatus] = useState("");
   const [wordsAttempted, setWordsAttempted] = useState(0);
   const [wordsCorrect, setWordsCorrect] = useState(0);
+  // Net WPM counts (see scoring.js): characters of correct words (letters +
+  // space) and every letter key, deleted ones included.
+  const [correctChars, setCorrectChars] = useState(0);
+  const [letterKeys, setLetterKeys] = useState(0);
+  const [correctLetterKeys, setCorrectLetterKeys] = useState(0);
   const [startTime, setStartTime] = useState(null);
-  const [wpm, setWpm] = useState(0);
-  const [accuracy, setAccuracy] = useState(100);
   const [currentWord, setCurrentWord] = useState("");
   const [timeLeft, setTimeLeft] = useState(30);
   const [timerRunning, setTimerRunning] = useState(false);
   const [gameOver, setGameOver] = useState(false);
   const [showResults, setShowResults] = useState(false);
-  const [score, setScore] = useState(0);
   const [showTooltip, setShowTooltip] = useState(false);
   const [selectedDuration, setSelectedDuration] = useState(30);
   const [lang, setLang] = useState(startLang);
@@ -128,32 +131,33 @@ function App() {
     return () => clearTimeout(t);
   }, [activeKey]);
 
-  useEffect(() => {
-    const saved = localStorage.getItem(STATS_KEY);
-    if (saved) {
-      const { wordsAttempted, wordsCorrect, wpm, accuracy } = JSON.parse(saved);
-      setWordsAttempted(wordsAttempted || 0);
-      setWordsCorrect(wordsCorrect || 0);
-      setWpm(wpm || 0);
-      setAccuracy(accuracy || 100);
-    }
-  }, []);
+  // The round's counts when time is up. The word being typed adds its
+  // correct start (no space) and is not a wrong word. These counts go to the
+  // server, which works out the score itself.
+  const counts = gameOver
+    ? {
+        correctChars: correctChars + correctPrefix(typedText, currentWord),
+        letterKeys,
+        correctLetterKeys,
+        wordsTyped: wordsAttempted,
+        wordsCorrect,
+      }
+    : null;
+  const final = counts && scoreRound({ duration: selectedDuration, ...counts });
 
+  // Last round's result, written only (version 2; nothing reads it back, so
+  // an older saved shape can't break the game).
   useEffect(() => {
-    localStorage.setItem(
-      STATS_KEY,
-      JSON.stringify({ wordsAttempted, wordsCorrect, wpm, accuracy }),
-    );
-  }, [wordsAttempted, wordsCorrect, wpm, accuracy]);
-
-  useEffect(() => {
-    if (startTime && wordsAttempted > 0) {
-      // Final WPM counts the full round. Live WPM uses at least 5 s so the first word doesn't spike.
-      const seconds = gameOver ? selectedDuration : Math.max((Date.now() - startTime) / 1000, 5);
-      setWpm(Math.round(wordsCorrect / (seconds / 60)));
-      setAccuracy(Math.round((wordsCorrect / wordsAttempted) * 100));
+    if (!final) return;
+    try {
+      localStorage.setItem(
+        STATS_KEY,
+        JSON.stringify({ version: 2, duration: selectedDuration, ...counts, ...final }),
+      );
+    } catch {
+      // No storage: skip.
     }
-  }, [wordsAttempted, wordsCorrect, startTime, gameOver, selectedDuration]);
+  }, [gameOver]);
 
   useEffect(() => {
     let interval;
@@ -197,12 +201,14 @@ function App() {
     setTypedText("");
     setWordsAttempted(0);
     setWordsCorrect(0);
+    setCorrectChars(0);
+    setLetterKeys(0);
+    setCorrectLetterKeys(0);
     setStartTime(null);
     setTimeLeft(selectedDuration);
     setTimerRunning(false);
     setGameOver(false);
     setShowResults(false);
-    setScore(0);
     setRoundToken(null);
     setSaved(null);
     setBoardPage(false);
@@ -214,17 +220,16 @@ function App() {
 
   // `pos`, `started` and `word` let the phone input apply several keys from one event.
   const typeLetter = (letter, pos = typedText.length, started = Boolean(startTime), word = currentWord) => {
+    // A letter key is correct when it matches the word's letter at that position.
     const isCorrect = word[pos]?.toLowerCase() === letter;
-    setScore(isCorrect ? (s) => s + 1 : (s) => Math.max(0, s - 1));
+    setLetterKeys((n) => n + 1);
+    if (isCorrect) setCorrectLetterKeys((n) => n + 1);
     setTypedText((t) => t + letter);
     setActiveKey(letter);
     setKeyStatus(isCorrect ? "correct" : "incorrect");
     if (!started) {
       setStartTime(Date.now());
       setTimerRunning(true);
-      // Counts loaded from localStorage belong to an earlier round; start this one at zero.
-      setWordsAttempted(0);
-      setWordsCorrect(0);
       // Ask for a round token; if this fails the game still works, only saving is off.
       setRoundToken(startRound(selectedDuration));
     }
@@ -244,10 +249,10 @@ function App() {
     const isCorrect = text.trim().toLowerCase() === word.toLowerCase();
     if (isCorrect) {
       setWordsCorrect((n) => n + 1);
-      setScore((s) => s + 5);
+      // Its letters and the space.
+      setCorrectChars((n) => n + word.length + 1);
       playCorrect();
     } else {
-      setScore((s) => Math.max(0, s - 3));
       playWrong();
     }
     const typed = text.trim();
@@ -277,7 +282,8 @@ function App() {
 
   // Phone keyboard: read the input's new value, not keydown (Android sends
   // "Unidentified"). Replay the change as the same backspaces, letters and
-  // Space a desktop player would press, so the score is the same.
+  // Space a desktop player would press, so the counts (letter keys included)
+  // and the score are the same.
   const handlePhoneInput = (e) => {
     if (gameOver || showBoard) return;
     const value = e.target.value.toLowerCase();
@@ -464,7 +470,7 @@ function App() {
   const savedRank = saved && (
     <p className="lb-rank">
       {t.savedAs} <strong>{saved.name}</strong>
-      {boardPlaces(saved.rank, score, t.places).map(({ id, text }) => (
+      {boardPlaces(saved.rank, t.places).map(({ id, text }) => (
         <span key={id} className="lb-place">
           <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14" aria-hidden="true">
             <path d={TROPHY_ICON} />
@@ -606,7 +612,7 @@ function App() {
               <div className="modal-main">
                 <div className="score-highlight">
                   <div className="score-label">
-                    {t.yourScore}
+                    {t.netWpm}
                     <span
                       className="info-icon"
                       onMouseEnter={() => setShowTooltip(true)}
@@ -617,11 +623,11 @@ function App() {
                       </svg>
                     </span>
                   </div>
-                  <div className="score-value">{score}</div>
+                  <div className="score-value">{formatWpm(final.netWpm10)}</div>
                   {showTooltip && (
                     <div className="tooltip-container">
                       <div className="tooltip">
-                        <p>{t.scoreSystem}</p>
+                        <p>{t.scoreTitle}</p>
                         <ul>
                           {t.scoreRules.map((rule) => (
                             <li key={rule}>{rule}</li>
@@ -634,12 +640,12 @@ function App() {
                 <h2>{t.timesUp}</h2>
                 <div className="results">
                   <div className="result-item">
-                    <span className="result-label">{t.wpmLong}</span>
-                    <span className="result-value">{wpm}</span>
+                    <span className="result-label">{t.rawWpm}</span>
+                    <span className="result-value">{formatWpm(final.rawWpm10)}</span>
                   </div>
                   <div className="result-item">
-                    <span className="result-label">{t.accuracy}</span>
-                    <span className="result-value">{accuracy}%</span>
+                    <span className="result-label">{t.precision}</span>
+                    <span className="result-value">{final.precision}%</span>
                   </div>
                   <div className="result-item">
                     <span className="result-label">{t.wordsTyped}</span>
@@ -664,7 +670,7 @@ function App() {
                     <SaveScore
                       lang={lang}
                       token={roundToken}
-                      result={{ score, wpm, accuracy, wordsTyped: wordsAttempted, wordsCorrect }}
+                      result={counts}
                       onSaved={(data) => {
                         setSaved(data);
                         setBoardPage(true);

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { strings } from "../i18n.js";
 import { DEVICE, fetchTop } from "../leaderboard.js";
 import DeviceBadge from "./DeviceBadge.jsx";
+import { formatWpm } from "../scoring.js";
 
 const BOARDS = ["alltime", "weekly"];
 
@@ -88,9 +89,8 @@ const Leaderboard = ({ duration, initial, highlight, showDurations = false, show
             <tr>
               <th>#</th>
               <th className="lb-name">{t.name}</th>
-              <th>{t.score}</th>
               <th>{t.wpm}</th>
-              <th>{t.acc}</th>
+              <th>{t.prec}</th>
             </tr>
           </thead>
           <tbody>
@@ -100,9 +100,8 @@ const Leaderboard = ({ duration, initial, highlight, showDurations = false, show
                 <td className="lb-name" title={r.name}>
                   {r.name}
                 </td>
-                <td>{r.score}</td>
-                <td>{r.wpm}</td>
-                <td>{r.accuracy}%</td>
+                <td>{formatWpm(r.netWpm10)}</td>
+                <td>{r.precision}%</td>
               </tr>
             ))}
           </tbody>

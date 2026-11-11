@@ -8,22 +8,23 @@ Live: https://rbmrs.dev/type-master (standalone: https://rbmrs.dev/thetypemaster
 
 - 30s, 1m or 3m rounds. The timer starts on your first keystroke.
 - On-screen keyboard that flashes green or red for each key.
-- Results at the end: score, words per minute, accuracy, words typed, correct words.
-- Stats saved in `localStorage` under `typeMasterStats`.
+- Results at the end: net WPM (big), raw WPM, precision, words typed, correct words.
+- The last round's result is saved in `localStorage` under `typeMasterStats` (`version: 2`; nothing reads it back).
 - Language menu (flag, top right): English or Brazilian Portuguese. It sets the words and all game text. The choice is saved under `typeMasterLang`; without one, the browser language decides.
 - Quiet sound cues, made with Web Audio: a light tick for a correct word, a low tone for a wrong word, a chime when time is up. No sound per letter. The speaker button (top right) turns them on or off; the choice is saved under `typeMasterSound`. On by default.
 - Leaderboard per round length (all-time and this week), with separate desktop and phone boards. The player sees the board for their device, marked by a small icon. Save from the results card; the last name is kept under `typeMasterName`. The standalone page also has a Leaderboard link. Backend: `leaderboard/` (Cloudflare Worker + D1, see its README).
 
 ### Scoring
 
-| Action | Points |
-| --- | --- |
-| Correct letter | +1 |
-| Incorrect letter | −1 |
-| Correct word | +5 |
-| Incorrect word | −3 |
+The score is **net WPM** = (correct characters ÷ 5 − wrong words) ÷ minutes, shown to 1 decimal. Below 0 shows as 0.
 
-The score never drops below 0.
+- Correct characters: the letters of each correct word + 1 for its space, plus the correct start of the word being typed when time runs out (letters before its first mistake, no space). That last word is never a wrong word.
+- Each wrong word costs 5 characters, so a skipped word always loses. A fixed typo costs only time.
+- Raw WPM = correct characters ÷ 5 ÷ minutes (before the wrong-word cost).
+- Precision = correct letter keys ÷ all letter keys, deleted ones included. A key is correct when it matches the word's letter at that position. Example: type "cst", delete "st", type "at" = 5 letter keys, 4 correct = 80%.
+- Leaderboard ties: fewer wrong words, then the earlier score.
+
+The code is `src/scoring.js`; the leaderboard Worker uses the same file.
 
 ## Development
 
@@ -32,6 +33,7 @@ npm install
 npm run dev      # local dev server
 npm run build    # production build to dist/
 npm run preview  # serve the production build
+npm test         # word list and scoring tests (node --test, no extra deps)
 ```
 
 ## Project layout
@@ -39,7 +41,8 @@ npm run preview  # serve the production build
 ```
 index.html                  entry HTML, includes word-layout CSS overrides
 src/main.jsx                React root
-src/App.jsx                 game state, timer, scoring, input, results modal
+src/App.jsx                 game state, timer, key counts, input, results modal
+src/scoring.js              net WPM, raw WPM and precision (shared with the Worker)
 src/sound.js                sound cues (Web Audio) and the saved on/off choice
 src/leaderboard.js          leaderboard API client, Worker URL (VITE_LEADERBOARD_URL), random names
 src/i18n.js                 game text in English and Portuguese
@@ -50,6 +53,7 @@ src/components/WordDisplay.jsx  scrolling word row (3 history, 1 current, 3 upco
 src/components/Keyboard.jsx     on-screen keyboard
 src/words.js                word list and random picker
 src/index.css               styles
+test/                       node --test tests: word lengths, scoring and the Worker's checks
 ```
 
 ## History

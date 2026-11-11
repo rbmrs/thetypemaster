@@ -7,7 +7,9 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "schema": "wrangler d1 execute typemaster-leaderboard --remote --file=schema.sql",
-    "migrate:device": "wrangler d1 execute typemaster-leaderboard --remote --file=migrations/0001_device.sql"
+    "migrate:device": "wrangler d1 execute typemaster-leaderboard --remote --file=migrations/0001_device.sql",
+    "backup": "wrangler d1 export typemaster-leaderboard --remote --table scores --output backup-scores-$(date -u +%Y%m%d-%H%M%S).sql",
+    "migrate:net-wpm": "wrangler d1 execute typemaster-leaderboard --remote --file=migrations/0002_net_wpm.sql"
   },
   "devDependencies": {
     "wrangler": "^4.160.0"
