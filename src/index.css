@@ -1325,3 +1325,30 @@ html.touch .top-tools {
   font-weight: 400;
   max-width: min(14rem, 70vw);
 }
+
+/* Results card: the info icon sits at the top right of the score, out of
+   flow, so the number stays centred. */
+.score-number {
+  position: relative;
+  display: inline-block;
+}
+.score-info {
+  position: absolute;
+  top: 0.35em;
+  left: calc(100% + 0.4rem);
+  font-size: 1rem;
+}
+.score-highlight .score-value {
+  margin-top: 0;
+}
+.visually-hidden {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}

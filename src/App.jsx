@@ -611,19 +611,22 @@ function App() {
             ) : (
               <div className="modal-main">
                 <div className="score-highlight">
-                  <div className="score-label">
-                    {t.netWpm}
-                    <span
-                      className="info-icon"
-                      onMouseEnter={() => setShowTooltip(true)}
-                      onMouseLeave={() => setShowTooltip(false)}
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-                        <path d={INFO_ICON} />
-                      </svg>
+                  {/* The label stays for screen readers; the number speaks for itself. */}
+                  <div className="score-label visually-hidden">{t.netWpm}</div>
+                  <div className="score-value">
+                    <span className="score-number">
+                      {formatWpm(final.netWpm10)}
+                      <span
+                        className="info-icon score-info"
+                        onMouseEnter={() => setShowTooltip(true)}
+                        onMouseLeave={() => setShowTooltip(false)}
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                          <path d={INFO_ICON} />
+                        </svg>
+                      </span>
                     </span>
                   </div>
-                  <div className="score-value">{formatWpm(final.netWpm10)}</div>
                   {showTooltip && (
                     <div className="tooltip-container">
                       <div className="tooltip">
