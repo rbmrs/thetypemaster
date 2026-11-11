@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node --test \"test/*.test.js\""
+    "test": "node --test \"test/*.test.js\"",
+    "bot": "node scripts/bot.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",
@@ -15,6 +16,7 @@
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.4",
+    "playwright-core": "^1.65.0",
     "vite": "^6.0.0"
   }
 }

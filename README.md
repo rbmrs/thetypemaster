@@ -34,7 +34,15 @@ npm run dev      # local dev server
 npm run build    # production build to dist/
 npm run preview  # serve the production build
 npm test         # word list and scoring tests (node --test, no extra deps)
+npm run bot      # test bot: plays 30s, 1m and 3m rounds in Chrome, no save
 ```
+
+The test bot (`scripts/bot.mjs`, Playwright with the installed Google Chrome) types like a fast human: about 70–90 WPM, uneven key timing, short pauses, a few typos fixed with Backspace. It starts its own Vite server and checks that each round ends with a score on the results card. It prints each round's net WPM and precision.
+
+- `--mode 30` (or `60`, `180`, `30s`, `1m`, `3m`, a comma list, `all`): rounds to play. Default: all three.
+- `--save`: save each score as "Bot Ada" or "Bot Turing" (they take turns) and check the save. It goes to the local Worker at `http://localhost:8787`, and starts `wrangler dev` in `leaderboard/` when none runs. That needs `leaderboard/.dev.vars` and the local D1 (see `leaderboard/README.md`).
+- `--live`: with `--save`, save to the live board instead. Without it the game never talks to the live Worker.
+- `--headed` shows the browser; `--wpm 80` sets the speed.
 
 ## Project layout
 
@@ -54,6 +62,7 @@ src/components/Keyboard.jsx     on-screen keyboard
 src/words.js                word list and random picker
 src/index.css               styles
 test/                       node --test tests: word lengths, scoring and the Worker's checks
+scripts/bot.mjs             test bot (npm run bot): plays full rounds in Chrome like a fast human
 ```
 
 ## History
