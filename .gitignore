@@ -2,3 +2,4 @@ node_modules
 dist
 .netlify
 .DS_Store
+scripts/.bot-state.json

@@ -14,7 +14,7 @@
 // local Worker on :8787, and starts `wrangler dev` in leaderboard/ when none runs.
 
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import net from "node:net";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -26,11 +26,31 @@ const LIVE_WORKER = "https://typemaster-leaderboard.rbmrs.workers.dev";
 const BOT_NAMES = ["Bot Ada", "Bot Turing"];
 const MODES = { 30: 30, "30s": 30, 60: 60, "1m": 60, 180: 180, "3m": 180 };
 const LABEL = { 30: "30s", 60: "1m", 180: "3m" };
+const DEVICES = { desktop: "desktop", phone: "phone", mobile: "phone" };
+// Which bot name each board used last, so runs take turns: Ada, Turing, Ada ...
+const STATE_FILE = join(ROOT, "scripts", ".bot-state.json");
 
 // --- options ----------------------------------------------------------------
 
+// Short forms:
+//   bot run desktop|mobile 30s|1m|3m [live]   play one round and save it
+//   bot delete [live]                         delete every bot score
+function expandShort(argv) {
+  const [cmd, ...rest] = argv;
+  const live = rest.includes("live") ? ["--live"] : [];
+  const others = rest.filter((a) => a !== "live");
+  if (cmd === "run") {
+    const [device, mode, ...flags] = others;
+    if (!DEVICES[device] || !MODES[mode]) fail("usage: bot run desktop|mobile 30s|1m|3m [live]");
+    return ["--device", device, "--mode", mode, "--save", "--alternate", ...live, ...flags];
+  }
+  if (cmd === "delete") return ["--clear", ...live, ...others];
+  return argv;
+}
+
 function parseArgs(argv) {
-  const opts = { modes: [30, 60, 180], save: false, live: false, clear: false, headed: false, wpm: null };
+  argv = expandShort(argv);
+  const opts = { modes: [30, 60, 180], device: "desktop", save: false, live: false, clear: false, alternate: false, headed: false, wpm: null };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     const value = () => {
@@ -41,6 +61,11 @@ function parseArgs(argv) {
     if (a === "--save") opts.save = true;
     else if (a === "--live") opts.live = true;
     else if (a === "--clear") opts.clear = true;
+    else if (a === "--alternate") opts.alternate = true;
+    else if (a.startsWith("--device")) {
+      const v = value();
+      opts.device = DEVICES[v] ?? fail(`unknown device "${v}" (use desktop or mobile)`);
+    }
     else if (a === "--headed") opts.headed = true;
     else if (a.startsWith("--mode")) {
       const v = value();
@@ -50,7 +75,7 @@ function parseArgs(argv) {
       opts.wpm = Number(value());
       if (!(opts.wpm >= 20 && opts.wpm <= 120)) fail("--wpm must be 20-120");
     } else if (a === "--help" || a === "-h") {
-      console.log("usage: npm run bot -- [--mode 30|60|180|all] [--save [--live]] [--headed] [--wpm N]\n       npm run bot -- --clear [--live]   delete the bot names' scores");
+      console.log("usage: npm run bot -- [--mode 30|60|180|all] [--device desktop|mobile] [--save [--live]] [--headed] [--wpm N]\n       bot run desktop|mobile 30s|1m|3m [live]\n       bot delete [live]\n       npm run bot -- --clear [--live]   delete the bot names' scores");
       process.exit(0);
     } else fail(`unknown option ${a}`);
   }
@@ -148,10 +173,12 @@ async function typeWord(page, pacer, word) {
   return true;
 }
 
-async function playRound(page, duration, wpm) {
+async function playRound(page, duration, wpm, isPhone) {
   await page.locator(".timer-option", { hasText: LABEL[duration] }).click();
-  // The click gives the button focus; drop it so keys go to the game.
-  await page.evaluate(() => document.activeElement?.blur());
+  // Desktop: the click gives the button focus; drop it so keys go to the game.
+  // Phone: tap the text box, as a player does to open the keyboard.
+  if (isPhone) await page.locator(".typed-input").tap();
+  else await page.evaluate(() => document.activeElement?.blur());
   const pacer = new Pacer(wpm);
   const current = page.locator(".words-container .word.current");
   const next = page.locator(".words-container .word").nth(4);
@@ -273,6 +300,18 @@ async function ensureLocalWorker() {
   }
 }
 
+function nextBotName(device, duration) {
+  let state = {};
+  try {
+    state = JSON.parse(readFileSync(STATE_FILE, "utf8"));
+  } catch {}
+  const key = `${device}-${duration}`;
+  const name = BOT_NAMES[((state[key] ?? -1) + 1) % BOT_NAMES.length];
+  state[key] = BOT_NAMES.indexOf(name);
+  writeFileSync(STATE_FILE, JSON.stringify(state, null, 2) + "\n");
+  return name;
+}
+
 // Delete every score saved under a bot name, from the local D1 (or the live
 // one with --live). Only rows whose name is a bot name are touched.
 function clearBotScores(live) {
@@ -313,10 +352,15 @@ async function main() {
   try {
     for (const duration of opts.modes) {
       const wpm = opts.wpm ?? Math.round(rand(70, 90));
-      const name = BOT_NAMES[nameIndex++ % BOT_NAMES.length];
-      console.log(`\n${LABEL[duration]}: playing at ~${wpm} WPM${opts.save ? ` as "${name}"` : " (no save)"} ...`);
+      const name = opts.alternate ? nextBotName(opts.device, duration) : BOT_NAMES[nameIndex++ % BOT_NAMES.length];
+      console.log(`\n${LABEL[duration]} ${opts.device}: playing at ~${wpm} WPM${opts.save ? ` as "${name}"` : " (no save)"} ...`);
       // A fresh context per round: clean localStorage, English words, sound off.
-      const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+      // Phone: touch emulation, so the game shows its phone layout and board.
+      const context = await browser.newContext(
+        opts.device === "phone"
+          ? { viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true }
+          : { viewport: { width: 1280, height: 900 } },
+      );
       await context.addInitScript(() => {
         localStorage.setItem("typeMasterLang", "en");
         localStorage.setItem("typeMasterSound", "off");
@@ -327,7 +371,9 @@ async function main() {
       try {
         await page.goto(gameUrl);
         await page.locator(".words-container .word.current").waitFor();
-        const r = await playRound(page, duration, wpm);
+        const isPhone = await page.evaluate(() => document.documentElement.classList.contains("touch"));
+        if (isPhone !== (opts.device === "phone")) throw new Error(`game did not take the ${opts.device} layout`);
+        const r = await playRound(page, duration, wpm, isPhone);
         if (!(Number(r.netWpm) > 0)) throw new Error(`results card shows no score (${r.netWpm})`);
         if (errors.length) throw new Error(`page errors: ${errors.join("; ")}`);
         let line = `${LABEL[duration]}: net WPM ${r.netWpm}, precision ${r.precision}, words ${r.wordsCorrect}/${r.wordsTyped} correct, round ${r.elapsed.toFixed(1)}s`;

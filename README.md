@@ -45,7 +45,14 @@ The test bot (`scripts/bot.mjs`, Playwright with the installed Google Chrome) ty
 - `--headed` shows the browser; `--wpm 80` sets the speed.
 - `--clear`: play nothing; delete every "Bot Ada" and "Bot Turing" score from the local board (`--clear --live` for the live board). Other names are not touched.
 
-Example: `npm run bot -- --mode 30 --save`, check the board, then `npm run bot -- --clear`.
+- `--device mobile`: play as a phone (touch emulation), so the score goes to the phone board.
+
+Short forms (`alias bot='node ~/dev/thetypemaster/scripts/bot.mjs'`):
+
+- `bot run desktop|mobile 30s|1m|3m [live]`: play one round and save it. Names take turns per board: Ada, Turing, Ada ... (kept in `scripts/.bot-state.json`, gitignored).
+- `bot delete [live]`: delete every bot score, all round lengths and devices.
+
+Without `live` both use the local board.
 
 ## Project layout
 
