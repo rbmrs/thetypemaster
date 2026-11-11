@@ -74,7 +74,7 @@ const ScoreHighlight = ({ lang, score }) => {
   return (
     <div className="score-highlight">
       {/* The label stays for screen readers; the number speaks for itself. */}
-      <div className="score-label visually-hidden">{t.netWpm}</div>
+      <div className="score-label visually-hidden">{t.netCpm}</div>
       <div className="score-value">
         <span className="score-number">
           {score}

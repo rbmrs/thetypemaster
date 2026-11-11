@@ -1251,7 +1251,7 @@ html.touch .top-tools {
   color: var(--muted);
 }
 /* Fixed content widths (padding comes on top) fit the widest bold value:
-   rank 10, net WPM 199.9, precision 100%. The name column takes the rest
+   rank 10, score 1250, precision 100%. The name column takes the rest
    and is cut with "…". */
 .lb-table th:nth-child(1) {
   width: 1.25rem;

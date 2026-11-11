@@ -1,7 +1,9 @@
-// Net WPM and precision. Pure functions, shared by the game and the
-// leaderboard Worker (leaderboard/src/index.js imports this file), so both
-// compute the same numbers.
+// The score, net WPM and precision. Pure functions, shared by the game and
+// the leaderboard Worker (leaderboard/src/index.js imports this file), so
+// both compute the same numbers.
 //
+// - The score is net characters per minute (CPM), a whole number. See netCpm.
+
 // - Correct characters: letters of each correct word + 1 for its space, plus
 //   the correct start of the word being typed when time runs out (letters
 //   before its first mistake, no space).
@@ -44,6 +46,11 @@ export function roundLead(steps, duration) {
   return lead;
 }
 
+// The score: net characters per minute, a whole number, never below 0.
+// Exact at 30 s (netChars * 2) and 1 m (netChars); at 3 m netChars / 3,
+// rounded. From net characters, not from the rounded net WPM.
+export const netCpm = (netChars, duration) => Math.max(0, Math.round((netChars * 60) / duration));
+
 // WPM values are integers in tenths (123 = 12.3 WPM), so no float drift.
 // (chars / 5) / (duration / 60) * 10 = chars * 120 / duration.
 export function scoreRound({ duration, correctChars, letterKeys, correctLetterKeys, wordsTyped, wordsCorrect }) {
@@ -53,7 +60,5 @@ export function scoreRound({ duration, correctChars, letterKeys, correctLetterKe
   const rawWpm10 = Math.round((correctChars * 120) / duration);
   // Floor, so any wrong key shows below 100%.
   const precision = letterKeys > 0 ? Math.floor((correctLetterKeys * 100) / letterKeys) : 0;
-  return { wrongWords, netChars, netWpm10, rawWpm10, precision };
+  return { wrongWords, netChars, cpm: netCpm(netChars, duration), netWpm10, rawWpm10, precision };
 }
-
-export const formatWpm = (wpm10) => (wpm10 / 10).toFixed(1);

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { WRONG_WORD_CHARS, correctPrefix, formatWpm, roundLead, scoreRound, wordStep } from "../src/scoring.js";
+import { WRONG_WORD_CHARS, correctPrefix, netCpm, roundLead, scoreRound, wordStep } from "../src/scoring.js";
 import { RoundTrace } from "../src/round.js";
 import { checkResult } from "../leaderboard/src/index.js";
 
@@ -66,7 +66,9 @@ test("net WPM: correct chars / 5 minus wrong words, per minute", () => {
   assert.equal(s.wrongWords, 1);
   // (13 / 5 - 1) / 0.5 = 3.2
   assert.equal(s.netWpm10, 32);
-  assert.equal(formatWpm(s.netWpm10), "3.2");
+  // Score: net characters 13 - 5 = 8 in 30 s = 16 per minute.
+  assert.equal(s.netChars, 8);
+  assert.equal(s.cpm, 16);
   // 13 / 5 / 0.5 = 5.2
   assert.equal(s.rawWpm10, 52);
   // letters: 3 + 5 + 3 + 5 = 16; wrong keys: g, o (dgo), x (tabxe). The "e"
@@ -86,6 +88,7 @@ test("the unfinished word is never a wrong word and has no space credit", () => 
 test("below 0 shows as 0", () => {
   const r = play(30, [["cat", "cat "], ["dog", "x "], ["dog", "y "], ["dog", "z "]]);
   assert.equal(scoreRound(r).netWpm10, 0);
+  assert.equal(scoreRound(r).cpm, 0);
   assert.equal(checkResult(r), null);
 });
 
@@ -94,6 +97,25 @@ test("ties: a skipped word always loses", () => {
   const a = scoreRound(play(30, [["cat", "cat "]]));
   const b = scoreRound(play(30, [["cat", "cat "], ["dog", "d "]]));
   assert.ok(b.netWpm10 < a.netWpm10);
+  assert.ok(b.cpm < a.cpm);
+});
+
+test("score: net characters per minute, a whole number", () => {
+  // Exact at 30 s and 1 m.
+  assert.equal(netCpm(178, 30), 356);
+  assert.equal(netCpm(356, 60), 356);
+  // 3 m: net characters / 3, rounded.
+  assert.equal(netCpm(300, 180), 100);
+  assert.equal(netCpm(301, 180), 100);
+  assert.equal(netCpm(302, 180), 101);
+  // Never below 0.
+  assert.equal(netCpm(-7, 30), 0);
+  assert.equal(netCpm(0, 60), 0);
+  // From net characters, not the rounded net WPM: 301 and 302 both store
+  // net_wpm10 201 at 3 m, but show 100 and 101.
+  const at3m = (c) => scoreRound({ duration: 180, correctChars: c, letterKeys: c, correctLetterKeys: c, wordsTyped: 75, wordsCorrect: 75 });
+  assert.deepEqual([at3m(301).netWpm10, at3m(302).netWpm10], [201, 201]);
+  assert.deepEqual([at3m(301).cpm, at3m(302).cpm], [100, 101]);
 });
 
 // A plausible 60 s round: 50 correct 5-letter words, 2 wrong, a few typos.
@@ -105,6 +127,7 @@ test("valid rounds pass", () => {
   assert.equal(checkResult(valid), null);
   const s = scoreRound(valid);
   assert.equal(s.netWpm10, 580); // (300 / 5 - 2) / 1
+  assert.equal(s.cpm, 290); // 300 - 5 * 2 in 1 minute
   assert.equal(s.precision, 97);
   // The floor: 50 shortest (3-letter) words, 4 characters each.
   assert.equal(checkResult({ ...valid, correctChars: 50 * 4, letterKeys: 200, correctLetterKeys: 150 }), null);

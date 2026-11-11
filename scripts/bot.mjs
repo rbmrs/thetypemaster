@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Test bot: plays full rounds in a real Chrome like a fast human (about
 // 70-90 WPM, uneven key timing, short pauses, a few typos fixed with
-// Backspace), then checks the results card and optionally saves the score.
+// Backspace), then checks the results card (score in characters per
+// minute) and optionally saves the score.
 //
 //   npm run bot                        all modes (30s, 1m, 3m), no save
 //   npm run bot -- --mode 30           one mode (30, 60, 180 or 30s, 1m, 3m; comma list ok)
@@ -200,9 +201,9 @@ async function playRound(page, duration, wpm, isPhone) {
   }
   await page.locator(".modal .score-number").waitFor({ timeout: 5000 });
   const elapsed = (Date.now() - started) / 1000;
-  const netWpm = (await page.locator(".modal .score-number").textContent()).trim();
+  const cpm = (await page.locator(".modal .score-number").textContent()).trim();
   const values = await page.locator(".modal .result-item .result-value").allTextContents();
-  return { netWpm, precision: values[0], wordsTyped: values[1], wordsCorrect: values[2], botWords: words, elapsed };
+  return { cpm, precision: values[0], wordsTyped: values[1], wordsCorrect: values[2], botWords: words, elapsed };
 }
 
 async function saveScore(page, name) {
@@ -375,13 +376,16 @@ async function main() {
         const isPhone = await page.evaluate(() => document.documentElement.classList.contains("touch"));
         if (isPhone !== (opts.device === "phone")) throw new Error(`game did not take the ${opts.device} layout`);
         const r = await playRound(page, duration, wpm, isPhone);
-        if (!(Number(r.netWpm) > 0)) throw new Error(`results card shows no score (${r.netWpm})`);
+        if (!/^[1-9]\d*$/.test(r.cpm)) throw new Error(`results card shows no whole-number score (${r.cpm})`);
         if (errors.length) throw new Error(`page errors: ${errors.join("; ")}`);
-        let line = `${LABEL[duration]}: net WPM ${r.netWpm}, precision ${r.precision}, words ${r.wordsCorrect}/${r.wordsTyped} correct, round ${r.elapsed.toFixed(1)}s`;
+        let line = `${LABEL[duration]}: score ${r.cpm} CPM, precision ${r.precision}, words ${r.wordsCorrect}/${r.wordsTyped} correct, round ${r.elapsed.toFixed(1)}s`;
         if (opts.save) {
           const saved = await saveScore(page, name);
-          const serverWpm = (saved.result.netWpm10 / 10).toFixed(1);
-          if (serverWpm !== r.netWpm) throw new Error(`Worker scored ${serverWpm}, card shows ${r.netWpm}`);
+          const serverCpm = String(saved.result.cpm);
+          if (serverCpm !== r.cpm) throw new Error(`Worker scored ${serverCpm} CPM, card shows ${r.cpm}`);
+          // The saved row on the board shows the same score.
+          const row = saved.top?.alltime?.find((t) => t.name === saved.name);
+          if (saved.rank?.alltime?.current && row && String(row.cpm) !== r.cpm) throw new Error(`board shows ${row.cpm} CPM, card shows ${r.cpm}`);
           line += `; saved as "${saved.name}" (all-time #${saved.rank?.alltime?.rank}, weekly #${saved.rank?.weekly?.rank})`;
         }
         console.log(`PASS ${line}`);
@@ -400,7 +404,7 @@ async function main() {
 
   console.log("\nSummary");
   for (const r of results) {
-    console.log(r.ok ? `  ${LABEL[r.duration].padEnd(3)}  net WPM ${r.netWpm.padStart(5)}  precision ${r.precision}` : `  ${LABEL[r.duration].padEnd(3)}  FAILED`);
+    console.log(r.ok ? `  ${LABEL[r.duration].padEnd(3)}  ${r.cpm.padStart(4)} CPM  precision ${r.precision}` : `  ${LABEL[r.duration].padEnd(3)}  FAILED`);
   }
   process.exit(failed ? 1 : 0);
 }

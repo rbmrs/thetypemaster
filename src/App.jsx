@@ -9,7 +9,7 @@ import WordDisplay from "./components/WordDisplay.jsx";
 import { strings } from "./i18n.js";
 import { startRound } from "./leaderboard.js";
 import { RoundTrace, eventTime } from "./round.js";
-import { correctPrefix, formatWpm, scoreRound, wordStep } from "./scoring.js";
+import { correctPrefix, scoreRound, wordStep } from "./scoring.js";
 import { playCorrect, playTimeUp, playWrong, setSoundOn, soundOn, unlockSound } from "./sound.js";
 
 const STATS_KEY = "typeMasterStats";
@@ -87,7 +87,7 @@ function App() {
   const [keyStatus, setKeyStatus] = useState("");
   const [wordsAttempted, setWordsAttempted] = useState(0);
   const [wordsCorrect, setWordsCorrect] = useState(0);
-  // Net WPM counts (see scoring.js): characters of correct words (letters +
+  // Score counts (see scoring.js): characters of correct words (letters +
   // space) and every letter key, deleted ones included.
   const [correctChars, setCorrectChars] = useState(0);
   const [letterKeys, setLetterKeys] = useState(0);
@@ -657,7 +657,7 @@ function App() {
               </>
             ) : (
               <div className="modal-main">
-                <ScoreHighlight lang={lang} score={formatWpm(final.netWpm10)} />
+                <ScoreHighlight lang={lang} score={final.cpm} />
                 <h2>{t.timesUp}</h2>
                 <div className="results">
                   <div className="result-item">

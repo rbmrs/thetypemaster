@@ -13,13 +13,14 @@
 // minimum and maximum age, plausibility checks against the game's scoring,
 // and a per-IP rate limit (only a salted hash of the IP is stored).
 //
-// The game sends raw counts; the Worker computes net WPM and precision
-// itself with the game's own scoring code (src/scoring.js).
+// The game sends raw counts; the Worker computes the score (net characters
+// per minute), net WPM and precision itself with the game's own scoring code
+// (src/scoring.js).
 //
 // Ranking: net characters (correct characters - 5 per wrong word), then
 // fewer wrong words, then lead (ahead for longer), then the earlier entry.
 
-import { WRONG_WORD_CHARS, scoreRound } from "../../src/scoring.js";
+import { WRONG_WORD_CHARS, netCpm, scoreRound } from "../../src/scoring.js";
 
 const DURATIONS = [30, 60, 180];
 const DEVICES = ["desktop", "phone"];
@@ -162,7 +163,7 @@ export function checkResult({ duration, correctChars, letterKeys, correctLetterK
 // Board order, best first. Also in BEST_CTE and rankOf.
 const RANK_ORDER = "net_chars DESC, wrong_words ASC, lead DESC, created_at ASC, id ASC";
 
-// Why a row ranks above the next one when both show the same net WPM.
+// Why a row ranks above the next one when both show the same score (CPM).
 function tieBreak(a, b) {
   if (a.net_chars !== b.net_chars) return "chars";
   if (a.wrong_words !== b.wrong_words) return "wrongWords";
@@ -180,8 +181,9 @@ const BEST_CTE = `
     ) WHERE rn = 1
   )`;
 
-// `tieBreak` (only when the next row shows the same net WPM): why this row
-// ranks above it: "chars", "wrongWords", "lead" or "time".
+// `cpm`: the score shown, net characters per minute. `netWpm10` stays for
+// older games. `tieBreak` (only when the next row shows the same CPM): why
+// this row ranks above it: "chars", "wrongWords", "lead" or "time".
 export async function topRows(env, duration, device, since, limit) {
   const { results } = await env.DB.prepare(
     `${BEST_CTE}
@@ -190,27 +192,30 @@ export async function topRows(env, duration, device, since, limit) {
   )
     .bind(duration, device, since, limit)
     .all();
+  const cpm = (r) => netCpm(r.net_chars, duration);
   return results.map((r, i) => {
     const next = results[i + 1];
     const row = {
       name: r.name,
+      cpm: cpm(r),
       netWpm10: r.net_wpm10,
       precision: r.precision,
       wrongWords: r.wrong_words,
       date: new Date(r.created_at).toISOString(),
     };
-    if (next && next.net_wpm10 === r.net_wpm10) row.tieBreak = tieBreak(r, next);
+    if (next && cpm(next) === row.cpm) row.tieBreak = tieBreak(r, next);
     return row;
   });
 }
 
+// `best`: that best's net WPM in tenths (older games), `bestCpm`: its score.
 // `current`: the player's best on this board is the row just saved.
 // Rows ahead in RANK_ORDER: DESC columns are negated so one row-value
 // comparison covers the whole order.
 export async function rankOf(env, duration, device, since, nameKey, rowId) {
   const row = await env.DB.prepare(
     `${BEST_CTE}
-     SELECT me.id AS id, me.net_wpm10 AS best,
+     SELECT me.id AS id, me.net_wpm10 AS best, me.net_chars AS best_chars,
        (SELECT COUNT(*) FROM best b
          WHERE (-b.net_chars, b.wrong_words, -b.lead, b.created_at, b.id)
              < (-me.net_chars, me.wrong_words, -me.lead, me.created_at, me.id)
@@ -219,7 +224,7 @@ export async function rankOf(env, duration, device, since, nameKey, rowId) {
   )
     .bind(duration, device, since, nameKey)
     .first();
-  return row ? { rank: row.rank, best: row.best, current: row.id === rowId } : null;
+  return row ? { rank: row.rank, best: row.best, bestCpm: netCpm(row.best_chars, duration), current: row.id === rowId } : null;
 }
 
 // --- routes ----------------------------------------------------------------

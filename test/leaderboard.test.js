@@ -52,20 +52,31 @@ function save(db, { name, duration = 180, correctChars, wordsTyped, wordsCorrect
 const top = (db, duration = 180) => topRows({ DB: d1(db) }, duration, "desktop", 0, 10);
 const rank = (db, name, id, duration = 180) => rankOf({ DB: d1(db) }, duration, "desktop", 0, name.toLowerCase(), id);
 
-test("3m: 3k+1 and 3k+2 net characters show the same score but rank by characters", async () => {
-  // 301 and 302 net characters both store 201 (20.1 WPM) at 3m.
-  assert.equal(scoreRound({ duration: 180, correctChars: 301, letterKeys: 301, correctLetterKeys: 301, wordsTyped: 75, wordsCorrect: 75 }).netWpm10, 201);
-  assert.equal(scoreRound({ duration: 180, correctChars: 302, letterKeys: 302, correctLetterKeys: 302, wordsTyped: 75, wordsCorrect: 75 }).netWpm10, 201);
+test("3m: 300 and 301 net characters show the same score but rank by characters", async () => {
+  // Both show 100 CPM at 3m (301 / 3 = 100.3).
   const db = freshDb();
   // The lower one is saved first and has the higher lead: characters still win.
-  save(db, { name: "Early", correctChars: 301, wordsTyped: 75, wordsCorrect: 75, lead: 30_000_000 });
-  const late = save(db, { name: "Late", correctChars: 302, wordsTyped: 75, wordsCorrect: 75, lead: 1 });
+  save(db, { name: "Early", correctChars: 300, wordsTyped: 75, wordsCorrect: 75, lead: 30_000_000 });
+  const late = save(db, { name: "Late", correctChars: 301, wordsTyped: 75, wordsCorrect: 75, lead: 1 });
   const rows = await top(db);
   assert.deepEqual(rows.map((r) => r.name), ["Late", "Early"]);
-  assert.deepEqual(rows.map((r) => r.netWpm10), [201, 201]);
+  assert.deepEqual(rows.map((r) => r.cpm), [100, 100]);
+  assert.deepEqual(rows.map((r) => r.netWpm10), [201, 200]); // kept for older games
   assert.equal(rows[0].tieBreak, "chars");
   assert.equal(rows[1].tieBreak, undefined);
-  assert.deepEqual(await rank(db, "Late", late), { rank: 1, best: 201, current: true });
+  assert.deepEqual(await rank(db, "Late", late), { rank: 1, best: 201, bestCpm: 100, current: true });
+});
+
+test("tie note follows the shown score, not net WPM", async () => {
+  // 301 and 302 net characters both store net_wpm10 201 at 3m, but show
+  // 100 and 101 CPM: different scores, so no note.
+  const db = freshDb();
+  save(db, { name: "Low", correctChars: 301, wordsTyped: 75, wordsCorrect: 75 });
+  save(db, { name: "High", correctChars: 302, wordsTyped: 75, wordsCorrect: 75 });
+  const rows = await top(db);
+  assert.deepEqual(rows.map((r) => r.netWpm10), [201, 201]);
+  assert.deepEqual(rows.map((r) => r.cpm), [101, 100]);
+  assert.deepEqual(rows.map((r) => r.tieBreak), [undefined, undefined]);
 });
 
 test("ranking: net characters, fewer wrong words, lead, then earlier", async () => {
@@ -81,7 +92,8 @@ test("ranking: net characters, fewer wrong words, lead, then earlier", async () 
   };
   const rows = await top(db, 30);
   assert.deepEqual(rows.map((r) => r.name), ["More", "Clean", "Lead", "Same A", "Same B"]);
-  // Net WPM: 211-10 = 201 -> 80.4; the others 200 -> 80.0.
+  // Score: 211-10 = 201 net characters -> 402 CPM; the others 200 -> 400.
+  assert.deepEqual(rows.map((r) => r.cpm), [402, 400, 400, 400, 400]);
   assert.deepEqual(rows.map((r) => r.netWpm10), [804, 800, 800, 800, 800]);
   assert.deepEqual(rows.map((r) => r.tieBreak), [undefined, "wrongWords", "lead", "time", undefined]);
   const ranks = await Promise.all(rows.map((r) => rank(db, r.name, ids.first, 30)));
@@ -97,7 +109,7 @@ test("one row per name: its best, ties broken the same way", async () => {
   save(db, { ...base, name: "Bo", lead: 15 });
   const rows = await top(db, 60);
   assert.deepEqual(rows.map((r) => r.name), ["ada", "Bo"]);
-  assert.deepEqual(await rank(db, "Ada", best, 60), { rank: 1, best: 200, current: true });
+  assert.deepEqual(await rank(db, "Ada", best, 60), { rank: 1, best: 200, bestCpm: 100, current: true });
 });
 
 test("migration 0003 keeps old scores and rebuilds net characters", async () => {
