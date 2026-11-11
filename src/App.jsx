@@ -4,6 +4,7 @@ import LangMenu, { LANGS } from "./components/LangMenu.jsx";
 import DeviceBadge from "./components/DeviceBadge.jsx";
 import Leaderboard from "./components/Leaderboard.jsx";
 import SaveScore from "./components/SaveScore.jsx";
+import ScoreHighlight from "./components/ScoreHighlight.jsx";
 import WordDisplay from "./components/WordDisplay.jsx";
 import { strings } from "./i18n.js";
 import { startRound } from "./leaderboard.js";
@@ -21,8 +22,6 @@ const SOUND_ON_ICON =
   "M3,9V15H7L12,20V4L7,9H3M16.5,12C16.5,10.23 15.5,8.71 14,7.97V16.02C15.5,15.29 16.5,13.76 16.5,12M14,3.23V5.29C16.89,6.15 19,8.83 19,12C19,15.17 16.89,17.84 14,18.7V20.77C18,19.86 21,16.28 21,12C21,7.72 18,4.14 14,3.23Z";
 const SOUND_OFF_ICON =
   "M3,9H7L12,4V20L7,15H3V9M16.59,12L14,9.41L15.41,8L18,10.59L20.59,8L22,9.41L19.41,12L22,14.59L20.59,16L18,13.41L15.41,16L14,14.59L16.59,12Z";
-const INFO_ICON =
-  "M13,9H11V7H13M13,17H11V11H13M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z";
 
 const TIMER_OPTIONS = [
   { seconds: 30, label: "30s" },
@@ -98,7 +97,6 @@ function App() {
   const [timerRunning, setTimerRunning] = useState(false);
   const [gameOver, setGameOver] = useState(false);
   const [showResults, setShowResults] = useState(false);
-  const [showTooltip, setShowTooltip] = useState(false);
   const [selectedDuration, setSelectedDuration] = useState(30);
   const [lang, setLang] = useState(startLang);
   const [langMenuOpen, setLangMenuOpen] = useState(false);
@@ -659,36 +657,7 @@ function App() {
               </>
             ) : (
               <div className="modal-main">
-                <div className="score-highlight">
-                  {/* The label stays for screen readers; the number speaks for itself. */}
-                  <div className="score-label visually-hidden">{t.netWpm}</div>
-                  <div className="score-value">
-                    <span className="score-number">
-                      {formatWpm(final.netWpm10)}
-                      <span
-                        className="info-icon score-info"
-                        onMouseEnter={() => setShowTooltip(true)}
-                        onMouseLeave={() => setShowTooltip(false)}
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-                          <path d={INFO_ICON} />
-                        </svg>
-                      </span>
-                    </span>
-                  </div>
-                  {showTooltip && (
-                    <div className="tooltip-container">
-                      <div className="tooltip">
-                        <p>{t.scoreTitle}</p>
-                        <ul>
-                          {t.scoreRules.map((rule) => (
-                            <li key={rule}>{rule}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    </div>
-                  )}
-                </div>
+                <ScoreHighlight lang={lang} score={formatWpm(final.netWpm10)} />
                 <h2>{t.timesUp}</h2>
                 <div className="results">
                   <div className="result-item">

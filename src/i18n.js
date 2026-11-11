@@ -13,6 +13,7 @@ const STRINGS = {
     typeWord: "Type the highlighted word",
     space: "Space",
     netWpm: "Net WPM",
+    scoreInfo: "How the score works",
     scoreTitle: "Your score is your typing speed in words per minute.",
     scoreRules: [
       "Correct words raise it. Every letter counts, even in the word you are typing when time runs out.",
@@ -75,6 +76,7 @@ const STRINGS = {
     typeWord: "Digite a palavra em destaque",
     space: "Espaço",
     netWpm: "PPM líquido",
+    scoreInfo: "Como funciona a pontuação",
     scoreTitle: "Sua pontuação é sua velocidade em palavras por minuto.",
     scoreRules: [
       "Palavras certas aumentam a pontuação. Cada letra conta, até na palavra que você está digitando quando o tempo acaba.",
