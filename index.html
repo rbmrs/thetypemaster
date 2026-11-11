@@ -40,5 +40,15 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
+    <!-- Cloudflare Web Analytics: count only direct visits; inside the rbmrs.dev page frame, that page already counts the visit. -->
+    <script>
+      if (window.top === window.self) {
+        var cf = document.createElement('script');
+        cf.defer = true;
+        cf.src = 'https://static.cloudflareinsights.com/beacon.min.js';
+        cf.setAttribute('data-cf-beacon', '{"token": "b37c30e7a0554e7390c064aa9ed43f64"}');
+        document.body.appendChild(cf);
+      }
+    </script>
   </body>
 </html>
