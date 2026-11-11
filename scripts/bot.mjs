@@ -13,7 +13,7 @@
 // It starts its own Vite dev server. With --save (and no --live) it uses the
 // local Worker on :8787, and starts `wrangler dev` in leaderboard/ when none runs.
 
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import net from "node:net";
 import { dirname, join } from "node:path";
@@ -30,7 +30,7 @@ const LABEL = { 30: "30s", 60: "1m", 180: "3m" };
 // --- options ----------------------------------------------------------------
 
 function parseArgs(argv) {
-  const opts = { modes: [30, 60, 180], save: false, live: false, headed: false, wpm: null };
+  const opts = { modes: [30, 60, 180], save: false, live: false, clear: false, headed: false, wpm: null };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     const value = () => {
@@ -40,6 +40,7 @@ function parseArgs(argv) {
     };
     if (a === "--save") opts.save = true;
     else if (a === "--live") opts.live = true;
+    else if (a === "--clear") opts.clear = true;
     else if (a === "--headed") opts.headed = true;
     else if (a.startsWith("--mode")) {
       const v = value();
@@ -49,11 +50,12 @@ function parseArgs(argv) {
       opts.wpm = Number(value());
       if (!(opts.wpm >= 20 && opts.wpm <= 120)) fail("--wpm must be 20-120");
     } else if (a === "--help" || a === "-h") {
-      console.log("usage: npm run bot -- [--mode 30|60|180|all] [--save [--live]] [--headed] [--wpm N]");
+      console.log("usage: npm run bot -- [--mode 30|60|180|all] [--save [--live]] [--headed] [--wpm N]\n       npm run bot -- --clear [--live]   delete the bot names' scores");
       process.exit(0);
     } else fail(`unknown option ${a}`);
   }
-  if (opts.live && !opts.save) fail("--live only makes sense with --save");
+  if (opts.clear && opts.save) fail("--clear does not play; run it on its own");
+  if (opts.live && !opts.save && !opts.clear) fail("--live only makes sense with --save or --clear");
   return opts;
 }
 
@@ -271,10 +273,26 @@ async function ensureLocalWorker() {
   }
 }
 
+// Delete every score saved under a bot name, from the local D1 (or the live
+// one with --live). Only rows whose name is a bot name are touched.
+function clearBotScores(live) {
+  const keys = BOT_NAMES.map((n) => `'${n.toLowerCase()}'`).join(", ");
+  const sql = `DELETE FROM scores WHERE name_key IN (${keys})`;
+  console.log(`Deleting ${BOT_NAMES.join(" and ")} scores from the ${live ? "LIVE" : "local"} board ...`);
+  const r = spawnSync("npx", ["wrangler", "d1", "execute", "typemaster-leaderboard", live ? "--remote" : "--local", "--command", sql], {
+    cwd: join(ROOT, "leaderboard"),
+    stdio: "inherit",
+  });
+  if (r.status !== 0) fail("wrangler d1 execute failed");
+  console.log("Done. The board can show old rows for up to 30s (cache).");
+  process.exit(0);
+}
+
 // --- main -------------------------------------------------------------------
 
 async function main() {
   const opts = parseArgs(process.argv.slice(2));
+  if (opts.clear) return clearBotScores(opts.live);
   // Without --live the game never talks to the live Worker, saving or not.
   const workerUrl = opts.live ? LIVE_WORKER : LOCAL_WORKER;
   if (opts.save && !opts.live) await ensureLocalWorker();

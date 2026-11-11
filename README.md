@@ -43,6 +43,9 @@ The test bot (`scripts/bot.mjs`, Playwright with the installed Google Chrome) ty
 - `--save`: save each score as "Bot Ada" or "Bot Turing" (they take turns) and check the save. It goes to the local Worker at `http://localhost:8787`, and starts `wrangler dev` in `leaderboard/` when none runs. That needs `leaderboard/.dev.vars` and the local D1 (see `leaderboard/README.md`).
 - `--live`: with `--save`, save to the live board instead. Without it the game never talks to the live Worker.
 - `--headed` shows the browser; `--wpm 80` sets the speed.
+- `--clear`: play nothing; delete every "Bot Ada" and "Bot Turing" score from the local board (`--clear --live` for the live board). Other names are not touched.
+
+Example: `npm run bot -- --mode 30 --save`, check the board, then `npm run bot -- --clear`.
 
 ## Project layout
 
